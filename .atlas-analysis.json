@@ -1,0 +1,113 @@
+{
+  "projectType": "saas",
+  "projectName": "RegistroX",
+  "projectDescription": "Android mobile application for event ticket management with QR code scanning, authentication, and role-based access control.",
+  "theme": "almond",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "features",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/installation",
+              "getting-started/configuration",
+              "getting-started/running"
+            ]
+          },
+          {
+            "group": "User Features",
+            "pages": [
+              "features/authentication",
+              "features/tickets",
+              "features/profile",
+              "features/shopping-cart"
+            ]
+          },
+          {
+            "group": "Worker Features",
+            "pages": [
+              "features/qr-scanner",
+              "features/ticket-validation"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/project-structure",
+              "development/data-layer",
+              "development/ui-components",
+              "development/navigation",
+              "development/testing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Services",
+            "pages": [
+              "api/usuarios",
+              "api/entradas",
+              "api/compras"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "api/models/user",
+              "api/models/entrada",
+              "api/models/compra"
+            ]
+          },
+          {
+            "group": "ViewModels",
+            "pages": [
+              "api/viewmodels/login",
+              "api/viewmodels/carrito",
+              "api/viewmodels/profile"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "User authentication with OTP verification",
+    "Role-based access (User and Worker roles)",
+    "Event ticket browsing and purchasing",
+    "Shopping cart management with local persistence",
+    "QR code generation and scanning for tickets",
+    "Profile management with image upload",
+    "Ticket validation for workers",
+    "Offline session persistence with DataStore"
+  ],
+  "publicApiSurface": [
+    "EntradasApiService.getEntradas()",
+    "EntradasApiService.marcarEntradaUsada(codigoQR)",
+    "UsuarioApiService.getUsuarios()",
+    "UsuarioApiService.createUsuario(usuario)",
+    "UsuarioApiService.subirImagenMultipart(file, usuarioId)",
+    "ComprasApiService.getCompras()",
+    "ComprasApiService.createCompra(compra)",
+    "LoginViewModel.login(email, password)",
+    "LoginViewModel.verifyOtp(code)",
+    "CarritoViewModel.agregarEntrada(entrada)",
+    "CarritoViewModel.eliminarEntrada(entrada)",
+    "ProfileViewModel.uploadProfileImage(uri)"
+  ]
+}
