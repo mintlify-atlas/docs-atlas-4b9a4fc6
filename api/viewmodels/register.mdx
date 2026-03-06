@@ -1,0 +1,282 @@
+---
+title: "RegisterViewModel"
+description: "User registration form state management and validation"
+---
+
+# RegisterViewModel
+
+The `RegisterViewModel` manages user registration flow including form validation, account creation, and role assignment.
+
+## Overview
+
+This ViewModel handles:
+- Form field validation (email, password, confirm password)
+- Real-time error messaging
+- User registration via API
+- Automatic role assignment based on email domain
+- Navigation state management
+
+Located at: `ui/viewmodel/RegisterViewModel.kt`
+
+## Properties
+
+### formState
+
+Current state of the registration form with validation errors.
+
+```kotlin
+val formState: StateFlow<RegisterFormState>
+```
+
+**RegisterFormState fields:**
+- `email: String` - User's email address
+- `password: String` - User's password
+- `confirmPassword: String` - Password confirmation
+- `emailError: String?` - Email validation error message
+- `passwordError: String?` - Password validation error message  
+- `confirmPasswordError: String?` - Confirmation error message
+- `isValid: Boolean` - Whether form is valid for submission
+
+### registerResult
+
+Result of the registration operation.
+
+```kotlin
+val registerResult: StateFlow<RegisterResult?>
+```
+
+**RegisterResult sealed class:**
+- `Success(user: User)` - Registration succeeded with user data
+- `Error(message: String)` - Registration failed with error message
+
+### isLoading
+
+Indicates if registration is in progress.
+
+```kotlin
+val isLoading: StateFlow<Boolean>
+```
+
+### shouldNavigate
+
+Flag to trigger navigation after successful registration.
+
+```kotlin
+val shouldNavigate: StateFlow<Boolean>
+```
+
+## Methods
+
+### onEmailChange
+
+Updates the email field and validates it.
+
+```kotlin
+fun onEmailChange(value: String)
+```
+
+<ParamField path="value" type="String">
+  New email value
+</ParamField>
+
+**Validation rules:**
+- Cannot be blank
+- Must match email regex: `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`
+
+**Error messages:**
+- "El correo no puede estar vacio" - Empty field
+- "Debe ingresar un correo valido" - Invalid format
+
+### onPasswordChange
+
+Updates the password field and validates it.
+
+```kotlin
+fun onPasswordChange(value: String)
+```
+
+<ParamField path="value" type="String">
+  New password value
+</ParamField>
+
+**Validation rules:**
+- Cannot be blank
+- Minimum 6 characters
+- At least one uppercase letter
+- At least one number
+
+**Error messages:**
+- "La contraseña no puede estar vacia" - Empty field
+- "Debe tener al menos 6 caracteres, una mayuscula y un numero" - Invalid format
+
+### onConfirmPasswordChange
+
+Updates the confirm password field and validates it matches password.
+
+```kotlin
+fun onConfirmPasswordChange(value: String)
+```
+
+<ParamField path="value" type="String">
+  Password confirmation value
+</ParamField>
+
+**Validation rules:**
+- Cannot be blank
+- Must match password field exactly
+
+**Error messages:**
+- "Debe confirmar la contraseña" - Empty field
+- "Las contraseñas no coinciden" - Mismatch
+
+### register
+
+Attempts to register a new user account.
+
+```kotlin
+fun register()
+```
+
+**Registration flow:**
+1. Validates form is complete and valid
+2. Checks network connectivity
+3. Calls `authRepository.register(email, password)`
+4. Assigns role based on email domain:
+   - `@registrox.cl` → `Role.TRABAJADOR`
+   - Other domains → `Role.USUARIO`
+5. Returns `RegisterResult.Success` or `RegisterResult.Error`
+
+**Example usage:**
+
+```kotlin RegisterScreen.kt
+Button(
+    onClick = { viewModel.register() },
+    enabled = formState.isValid && !isLoading
+) {
+    if (isLoading) {
+        CircularProgressIndicator()
+    } else {
+        Text("Registrarse")
+    }
+}
+```
+
+### allowNavigation / resetNavigation
+
+Control navigation state after registration.
+
+```kotlin
+fun allowNavigation()
+fun resetNavigation()
+```
+
+Use these to manage post-registration navigation:
+
+```kotlin
+LaunchedEffect(shouldNavigate) {
+    if (shouldNavigate) {
+        navController.navigate(Routes.LOGIN)
+        viewModel.resetNavigation()
+    }
+}
+```
+
+### clearRegisterResult
+
+Clears the registration result state (for dismissing messages).
+
+```kotlin
+fun clearRegisterResult()
+```
+
+## Complete Usage Example
+
+```kotlin RegisterScreen.kt
+@Composable
+fun RegisterScreen(
+    navController: NavController,
+    viewModel: RegisterViewModel
+) {
+    val formState by viewModel.formState.collectAsState()
+    val registerResult by viewModel.registerResult.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val shouldNavigate by viewModel.shouldNavigate.collectAsState()
+
+    // Handle navigation after success
+    LaunchedEffect(shouldNavigate) {
+        if (shouldNavigate) {
+            navController.navigate(Routes.LOGIN) {
+                popUpTo(Routes.REGISTER) { inclusive = true }
+            }
+            viewModel.resetNavigation()
+        }
+    }
+
+    // Show success/error messages
+    registerResult?.let { result ->
+        when (result) {
+            is RegisterResult.Success -> {
+                Text("Usuario creado exitosamente", color = Color.Green)
+                viewModel.allowNavigation()
+            }
+            is RegisterResult.Error -> {
+                Text(result.message, color = Color.Red)
+            }
+        }
+    }
+
+    Column {
+        OutlinedTextField(
+            value = formState.email,
+            onValueChange = { viewModel.onEmailChange(it) },
+            label = { Text("Correo electronico") },
+            isError = formState.emailError != null,
+            supportingText = formState.emailError?.let { { Text(it) } }
+        )
+
+        OutlinedTextField(
+            value = formState.password,
+            onValueChange = { viewModel.onPasswordChange(it) },
+            label = { Text("Contraseña") },
+            visualTransformation = PasswordVisualTransformation(),
+            isError = formState.passwordError != null,
+            supportingText = formState.passwordError?.let { { Text(it) } }
+        )
+
+        OutlinedTextField(
+            value = formState.confirmPassword,
+            onValueChange = { viewModel.onConfirmPasswordChange(it) },
+            label = { Text("Confirmar contraseña") },
+            visualTransformation = PasswordVisualTransformation(),
+            isError = formState.confirmPasswordError != null,
+            supportingText = formState.confirmPasswordError?.let { { Text(it) } }
+        )
+
+        Button(
+            onClick = { viewModel.register() },
+            enabled = formState.isValid && !isLoading
+        ) {
+            Text(if (isLoading) "Registrando..." else "Registrarse")
+        }
+    }
+}
+```
+
+## Role Assignment Logic
+
+The ViewModel automatically assigns roles based on email domain:
+
+```kotlin
+val roleEnum = if (email.endsWith("@registrox.cl"))
+    Role.TRABAJADOR 
+else 
+    Role.USUARIO
+```
+
+This allows internal staff (using `@registrox.cl` emails) to automatically receive worker privileges.
+
+## Related
+
+- [Usuario API Service](/api/usuarios)
+- [User Model](/api/models/user)
+- [Authentication Feature](/features/authentication)

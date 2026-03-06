@@ -1,0 +1,295 @@
+---
+title: "ScannerViewModel"
+description: "QR code scanning and ticket validation management"
+---
+
+# ScannerViewModel
+
+The `ScannerViewModel` manages QR code scanning and real-time ticket validation for event workers.
+
+## Overview
+
+This ViewModel handles:
+- Ticket validation via QR code
+- Real-time API validation
+- Network connectivity checking
+- Validation result messaging
+
+Located at: `ui/viewmodel/ScannerViewModel.kt`
+
+## Properties
+
+### mensajeOperacion
+
+Message showing the result of the last validation operation.
+
+```kotlin
+val mensajeOperacion: State<String>
+```
+
+**Possible values:**
+- `""` - No operation performed yet
+- `"Sin conexión a internet"` - No network connectivity
+- `"Entrada validada correctamente"` - Ticket validated successfully
+- `"Error desconocido"` - Unknown error occurred
+- `"Error de conexión"` - Network exception
+- Custom error messages from API response
+
+## Methods
+
+### validarEntrada
+
+Validates a scanned QR code and marks the ticket as used.
+
+```kotlin
+fun validarEntrada(codigoQR: String, hasInternet: Boolean)
+```
+
+<ParamField path="codigoQR" type="String">
+  The QR code string scanned from the ticket
+</ParamField>
+
+<ParamField path="hasInternet" type="Boolean">
+  Network connectivity status from the UI
+</ParamField>
+
+**Validation flow:**
+1. Checks network connectivity
+2. If no internet, sets error message and returns
+3. Calls `entradasRepository.marcarEntradaUsada(codigoQR)`
+4. On success:
+   - Extracts message from response body
+   - Updates `mensajeOperacion` with success message
+5. On failure:
+   - Parses error body for detailed message
+   - Falls back to "Error desconocido" if parsing fails
+
+**Example usage:**
+
+```kotlin ScannerScreen.kt
+@Composable
+fun ScannerScreen(
+    viewModel: ScannerViewModel
+) {
+    val mensaje by viewModel.mensajeOperacion
+    val hasInternet = rememberNetworkStatus()
+
+    // QR Scanner callback
+    LaunchedEffect(scannedCode) {
+        if (scannedCode.isNotEmpty()) {
+            viewModel.validarEntrada(scannedCode, hasInternet)
+        }
+    }
+
+    // Display validation result
+    when {
+        mensaje.contains("validada correctamente") -> {
+            ResultCard(
+                message = mensaje,
+                color = Color.Green,
+                icon = Icons.Default.CheckCircle
+            )
+        }
+        mensaje.isNotEmpty() -> {
+            ResultCard(
+                message = mensaje,
+                color = Color.Red,
+                icon = Icons.Default.Error
+            )
+        }
+    }
+}
+```
+
+## Network Dependency
+
+The ViewModel requires connectivity status from the UI layer:
+
+```kotlin
+fun validarEntrada(codigoQR: String, hasInternet: Boolean) {
+    viewModelScope.launch {
+        if (!hasInternet) {
+            _mensajeOperacion.value = "Sin conexión a internet"
+            return@launch
+        }
+
+        try {
+            val response = entradasRepository.marcarEntradaUsada(codigoQR)
+            if (response.isSuccessful) {
+                _mensajeOperacion.value =
+                    response.body()?.get("mensaje") ?: "Entrada validada correctamente"
+            } else {
+                _mensajeOperacion.value =
+                    response.errorBody()?.string() ?: "Error desconocido"
+            }
+        } catch (e: Exception) {
+            _mensajeOperacion.value = "Error de conexión"
+        }
+    }
+}
+```
+
+<Note>
+  The ViewModel does not use Android Context, making it easier to test. Network status is passed from the UI layer which has access to ConnectivityManager.
+</Note>
+
+## API Response Handling
+
+### Success Response
+
+The API returns a JSON object with a message:
+
+```json
+{
+  "mensaje": "Entrada marcada como usada correctamente"
+}
+```
+
+The ViewModel extracts this message:
+
+```kotlin
+response.body()?.get("mensaje") ?: "Entrada validada correctamente"
+```
+
+### Error Response
+
+Error responses contain details in the error body:
+
+```json
+{
+  "error": "Esta entrada ya fue utilizada"
+}
+```
+
+Or:
+
+```json
+{
+  "error": "No se encontró entrada con ese código QR"
+}
+```
+
+The ViewModel displays these directly to the user:
+
+```kotlin
+response.errorBody()?.string() ?: "Error desconocido"
+```
+
+## Integration with ScannerScreen
+
+Complete integration example:
+
+```kotlin ScannerScreen.kt
+@Composable
+fun ScannerScreen(
+    onBackClick: () -> Unit
+) {
+    val viewModel: ScannerViewModel = viewModel()
+    val mensaje by viewModel.mensajeOperacion
+    val hasInternet = rememberNetworkStatus()
+    var scannedCode by remember { mutableStateOf("") }
+
+    Column {
+        // QR Scanner View
+        AndroidView(
+            factory = { context ->
+                BarcodeView(context).apply {
+                    decoderFactory = DefaultDecoderFactory()
+                    decodeContinuous { result ->
+                        scannedCode = result.text
+                        viewModel.validarEntrada(result.text, hasInternet)
+                    }
+                    resume()
+                }
+            }
+        )
+
+        // Validation result display
+        AnimatedVisibility(mensaje.isNotEmpty()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = when {
+                        mensaje.contains("correctamente") -> 
+                            Color(0xFF4CAF50)
+                        else -> 
+                            MaterialTheme.colorScheme.errorContainer
+                    }
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = when {
+                            mensaje.contains("correctamente") -> 
+                                Icons.Default.CheckCircle
+                            else -> 
+                                Icons.Default.Error
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        mensaje,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+## Validation States
+
+The ViewModel supports these validation states:
+
+| State | Message | UI Display |
+|-------|---------|------------|
+| **Success** | "Entrada validada correctamente" | Green card with checkmark |
+| **No Internet** | "Sin conexión a internet" | Red card with warning |
+| **Already Used** | "Esta entrada ya fue utilizada" | Red card with error |
+| **Not Found** | "No se encontró entrada con ese código QR" | Red card with error |
+| **Network Error** | "Error de conexión" | Red card with error |
+| **Unknown Error** | "Error desconocido" | Red card with error |
+
+## Testing
+
+The ViewModel can be tested without Android dependencies:
+
+```kotlin ScannerViewModelTest.kt
+@Test
+fun `validarEntrada without internet shows error`() = runTest {
+    val viewModel = ScannerViewModel()
+    
+    viewModel.validarEntrada("TICKET-123", hasInternet = false)
+    
+    assertEquals("Sin conexión a internet", viewModel.mensajeOperacion.value)
+}
+
+@Test
+fun `validarEntrada with valid code shows success`() = runTest {
+    val mockRepository = mock<EntradasRepository>()
+    val viewModel = ScannerViewModel(mockRepository)
+    
+    whenever(mockRepository.marcarEntradaUsada("TICKET-123"))
+        .thenReturn(Response.success(mapOf("mensaje" to "Entrada validada")))
+    
+    viewModel.validarEntrada("TICKET-123", hasInternet = true)
+    
+    assertTrue(viewModel.mensajeOperacion.value.contains("validada"))
+}
+```
+
+## Related
+
+- [Entradas API Service](/api/entradas)
+- [QR Scanner Feature](/features/qr-scanner)
+- [Ticket Validation Feature](/features/ticket-validation)
+- [Worker Home Screen](/features/ticket-validation#worker-interface)
