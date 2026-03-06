@@ -1,0 +1,428 @@
+---
+title: 'Compras API'
+description: 'API endpoints for managing ticket purchases in RegistroX'
+---
+
+## Get All Compras
+
+Retrieves a list of all purchases made in the system, including their associated tickets.
+
+```kotlin
+@GET("api/v1/compras")
+suspend fun getCompras(): Response<List<Compra>>
+```
+
+### HTTP Request
+
+`GET /api/v1/compras`
+
+### Response
+
+<ResponseField name="compras" type="Array<Compra>">
+  List of all purchases in the system
+  
+  <Expandable title="Compra properties">
+    <ResponseField name="id" type="Long">
+      Unique identifier for the purchase
+    </ResponseField>
+    
+    <ResponseField name="fechaCompra" type="String">
+      Date and time when the purchase was made (ISO 8601 format)
+    </ResponseField>
+    
+    <ResponseField name="usuario" type="Usuario" required>
+      The user who made the purchase
+      
+      <Expandable title="Usuario properties">
+        <ResponseField name="id" type="Long">
+          User identifier
+        </ResponseField>
+        
+        <ResponseField name="email" type="String">
+          User's email address
+        </ResponseField>
+        
+        <ResponseField name="rol" type="Rol">
+          User's role
+          
+          <Expandable title="Rol properties">
+            <ResponseField name="id" type="Long">
+              Role identifier
+            </ResponseField>
+            
+            <ResponseField name="nombre" type="String">
+              Role name
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="compraEntradas" type="Array<CompraEntrada>" default="[]">
+      List of tickets included in this purchase
+      
+      <Expandable title="CompraEntrada properties">
+        <ResponseField name="id" type="Long">
+          Unique identifier for this ticket instance
+        </ResponseField>
+        
+        <ResponseField name="estado" type="String" default="disponible">
+          Status of the ticket ("disponible", "usado", "vencido")
+        </ResponseField>
+        
+        <ResponseField name="codigoQR" type="String">
+          Generated QR code for this specific ticket
+        </ResponseField>
+        
+        <ResponseField name="entrada" type="Entrada">
+          The event ticket information
+          
+          <Expandable title="Entrada properties">
+            <ResponseField name="id" type="Long">
+              Event ticket identifier
+            </ResponseField>
+            
+            <ResponseField name="titulo" type="String">
+              Event title
+            </ResponseField>
+            
+            <ResponseField name="lugar" type="String">
+              Event location
+            </ResponseField>
+            
+            <ResponseField name="precio" type="Double">
+              Ticket price
+            </ResponseField>
+            
+            <ResponseField name="estado" type="String">
+              Event status
+            </ResponseField>
+            
+            <ResponseField name="cantidad" type="Int">
+              Available quantity
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "fechaCompra": "2024-03-15T14:30:00Z",
+    "usuario": {
+      "id": 1,
+      "email": "usuario@example.com",
+      "rol": {
+        "id": 2,
+        "nombre": "USER"
+      }
+    },
+    "compraEntradas": [
+      {
+        "id": 1,
+        "estado": "disponible",
+        "codigoQR": "QR123456789",
+        "entrada": {
+          "id": 1,
+          "titulo": "Concierto Rock en Vivo",
+          "lugar": "Estadio Nacional",
+          "precio": 50000.0,
+          "estado": "disponible",
+          "cantidad": 1
+        }
+      },
+      {
+        "id": 2,
+        "estado": "disponible",
+        "codigoQR": "QR123456790",
+        "entrada": {
+          "id": 1,
+          "titulo": "Concierto Rock en Vivo",
+          "lugar": "Estadio Nacional",
+          "precio": 50000.0,
+          "estado": "disponible",
+          "cantidad": 1
+        }
+      }
+    ]
+  }
+]
+```
+
+---
+
+## Create Compra
+
+Creates a new purchase transaction for one or more event tickets.
+
+```kotlin
+@POST("api/v1/compras")
+suspend fun createCompra(@Body compra: Compra): Response<Compra>
+```
+
+### HTTP Request
+
+`POST /api/v1/compras`
+
+### Request Body
+
+<ParamField body="usuario" type="Usuario" required>
+  The user making the purchase
+  
+  <Expandable title="Usuario properties">
+    <ParamField body="id" type="Long">
+      User identifier
+    </ParamField>
+    
+    <ParamField body="email" type="String" required>
+      User's email address
+    </ParamField>
+    
+    <ParamField body="rol" type="Rol" required>
+      User's role
+      
+      <Expandable title="Rol properties">
+        <ParamField body="id" type="Long">
+          Role identifier
+        </ParamField>
+        
+        <ParamField body="nombre" type="String">
+          Role name
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="compraEntradas" type="Array<CompraEntrada>" required>
+  List of tickets being purchased
+  
+  <Expandable title="CompraEntrada properties">
+    <ParamField body="entrada" type="Entrada" required>
+      The event ticket being purchased
+      
+      <Expandable title="Entrada properties">
+        <ParamField body="id" type="Long">
+          Event ticket identifier (reference to existing event)
+        </ParamField>
+        
+        <ParamField body="titulo" type="String" required>
+          Event title
+        </ParamField>
+        
+        <ParamField body="lugar" type="String" required>
+          Event location
+        </ParamField>
+        
+        <ParamField body="precio" type="Double" required>
+          Ticket price
+        </ParamField>
+        
+        <ParamField body="estado" type="String" required>
+          Event status
+        </ParamField>
+        
+        <ParamField body="cantidad" type="Int" default="1">
+          Number of tickets
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="fechaCompra" type="String">
+  Purchase date (optional - typically set by server)
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "usuario": {
+    "id": 1,
+    "email": "usuario@example.com",
+    "rol": {
+      "id": 2,
+      "nombre": "USER"
+    }
+  },
+  "compraEntradas": [
+    {
+      "entrada": {
+        "id": 1,
+        "titulo": "Concierto Rock en Vivo",
+        "lugar": "Estadio Nacional",
+        "precio": 50000.0,
+        "estado": "disponible",
+        "cantidad": 2
+      }
+    }
+  ]
+}
+```
+
+### Response
+
+<ResponseField name="compra" type="Compra">
+  The created purchase transaction
+  
+  <Expandable title="Compra properties">
+    <ResponseField name="id" type="Long">
+      Assigned unique identifier for the purchase
+    </ResponseField>
+    
+    <ResponseField name="fechaCompra" type="String">
+      Timestamp when the purchase was created
+    </ResponseField>
+    
+    <ResponseField name="usuario" type="Usuario">
+      The user who made the purchase
+    </ResponseField>
+    
+    <ResponseField name="compraEntradas" type="Array<CompraEntrada>">
+      List of purchased tickets with generated QR codes
+      
+      Each ticket will have a unique QR code generated for scanning at the event
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "id": 2,
+  "fechaCompra": "2024-03-15T16:45:00Z",
+  "usuario": {
+    "id": 1,
+    "email": "usuario@example.com",
+    "rol": {
+      "id": 2,
+      "nombre": "USER"
+    }
+  },
+  "compraEntradas": [
+    {
+      "id": 3,
+      "estado": "disponible",
+      "codigoQR": "QR789012345",
+      "entrada": {
+        "id": 1,
+        "titulo": "Concierto Rock en Vivo",
+        "lugar": "Estadio Nacional",
+        "precio": 50000.0,
+        "estado": "disponible",
+        "cantidad": 1
+      }
+    },
+    {
+      "id": 4,
+      "estado": "disponible",
+      "codigoQR": "QR789012346",
+      "entrada": {
+        "id": 1,
+        "titulo": "Concierto Rock en Vivo",
+        "lugar": "Estadio Nacional",
+        "precio": 50000.0,
+        "estado": "disponible",
+        "cantidad": 1
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Use Cases
+
+### Purchase Flow
+
+When a user purchases tickets through the app:
+
+1. User selects an event and quantity
+2. App calls `createCompra()` with user and ticket information
+3. Server creates the purchase and generates unique QR codes
+4. User receives confirmation with their tickets
+5. Each ticket can be scanned independently at the event
+
+```kotlin
+// Example implementation
+viewModelScope.launch {
+    try {
+        val compra = Compra(
+            usuario = currentUser,
+            compraEntradas = listOf(
+                CompraEntrada(
+                    entrada = selectedEntrada.copy(cantidad = ticketQuantity)
+                )
+            )
+        )
+        
+        val result = comprasApiService.createCompra(compra)
+        if (result.isSuccessful) {
+            val newCompra = result.body()
+            // Show success and display tickets with QR codes
+            navigateToTickets(newCompra)
+        } else {
+            showError("Error al procesar la compra")
+        }
+    } catch (e: Exception) {
+        showError("Error de conexión: ${e.message}")
+    }
+}
+```
+
+### Purchase History
+
+Users can view their complete purchase history:
+
+```kotlin
+// Example implementation
+viewModelScope.launch {
+    try {
+        val result = comprasApiService.getCompras()
+        if (result.isSuccessful) {
+            val allCompras = result.body() ?: emptyList()
+            // Filter by current user
+            val userCompras = allCompras.filter { 
+                it.usuario.id == currentUser.id 
+            }
+            updateUI(userCompras)
+        }
+    } catch (e: Exception) {
+        showError("Error al cargar historial: ${e.message}")
+    }
+}
+```
+
+### Calculating Total Purchase Amount
+
+```kotlin
+// Example: Calculate total for a purchase
+fun calculateTotal(compra: Compra): Double {
+    return compra.compraEntradas?.sumOf { 
+        it.entrada?.precio ?: 0.0 
+    } ?: 0.0
+}
+```
+
+### Checking Ticket Availability
+
+Before creating a purchase, verify that tickets are still available:
+
+```kotlin
+// Example: Validate purchase before submission
+fun validatePurchase(compra: Compra): Boolean {
+    return compra.compraEntradas?.all { compraEntrada ->
+        compraEntrada.entrada?.estado == "disponible" &&
+        compraEntrada.entrada.cantidad > 0
+    } ?: false
+}
+```

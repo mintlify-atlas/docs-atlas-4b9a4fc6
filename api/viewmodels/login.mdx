@@ -1,0 +1,230 @@
+---
+title: "LoginViewModel"
+description: "ViewModel for managing authentication and login state in RegistroX"
+---
+
+## Overview
+
+The `LoginViewModel` handles user authentication, login form state management, and session persistence. It coordinates with `AuthRepository` and `AuthDataStore` to authenticate users and manage their login state throughout the application.
+
+## Properties
+
+### State Flows
+
+<ParamField path="formState" type="StateFlow<LoginFormState>">
+  Reactive state containing login form fields and validation errors
+  
+  ```kotlin
+  data class LoginFormState(
+      val email: String = "",
+      val emailError: String? = null,
+      val password: String = "",
+      val passwordError: String? = null,
+      val loginError: String = "",
+      val isValid: Boolean = false
+  )
+  ```
+</ParamField>
+
+<ParamField path="user" type="StateFlow<User?>">
+  Current authenticated user, or null if not logged in
+</ParamField>
+
+<ParamField path="isLoading" type="StateFlow<Boolean>">
+  Loading state during authentication process
+</ParamField>
+
+### Flags
+
+<ParamField path="justLoggedIn" type="Boolean">
+  Flag to track if user just completed login (used for navigation)
+</ParamField>
+
+## Methods
+
+### onEmailChange
+
+Updates the email field in the form state and clears email-related errors.
+
+```kotlin
+fun onEmailChange(value: String)
+```
+
+<ParamField path="value" type="String">
+  The new email value
+</ParamField>
+
+**Usage Example:**
+
+```kotlin
+OutlinedTextField(
+    value = formState.email,
+    onValueChange = { viewModel.onEmailChange(it) },
+    label = { Text("Correo") }
+)
+```
+
+### onPasswordChange
+
+Updates the password field in the form state and clears password-related errors.
+
+```kotlin
+fun onPasswordChange(value: String)
+```
+
+<ParamField path="value" type="String">
+  The new password value
+</ParamField>
+
+**Usage Example:**
+
+```kotlin
+OutlinedTextField(
+    value = formState.password,
+    onValueChange = { viewModel.onPasswordChange(it) },
+    label = { Text("Contraseña") },
+    visualTransformation = PasswordVisualTransformation()
+)
+```
+
+### login
+
+Authenticates the user with the provided credentials.
+
+```kotlin
+fun login()
+```
+
+**Behavior:**
+1. Sets loading state to true
+2. Trims email and retrieves password from form state
+3. Calls `authRepository.login()` with credentials
+4. On success:
+   - Maps role (1 = TRABAJADOR, other = USUARIO)
+   - Updates user state
+   - Saves credentials to DataStore
+   - Sets `justLoggedIn` flag
+5. On failure: Updates form state with error message
+
+**Usage Example:**
+
+```kotlin
+Button(
+    onClick = { viewModel.login() },
+    enabled = !isLoading
+) {
+    if (isLoading)
+        CircularProgressIndicator()
+    else
+        Text("Iniciar sesión")
+}
+```
+
+<Note>
+  The login process includes an 800ms delay for UX purposes.
+</Note>
+
+### logout
+
+Clears the user session and resets all state.
+
+```kotlin
+fun logout()
+```
+
+**Behavior:**
+- Clears user data from DataStore
+- Resets user state to null
+- Resets `justLoggedIn` flag
+- Resets form state to initial values
+
+**Usage Example:**
+
+```kotlin
+Button(
+    onClick = { loginViewModel.logout() },
+    colors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.error
+    )
+) {
+    Text("Cerrar sesión")
+}
+```
+
+## Complete Usage Example
+
+```kotlin
+@Composable
+fun LoginScreen(navController: NavController, viewModel: LoginViewModel) {
+    val user by viewModel.user.collectAsStateWithLifecycle()
+    val formState by viewModel.formState.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+
+    LaunchedEffect(user) {
+        if (user != null && viewModel.justLoggedIn) {
+            navController.navigate(Routes.OTP) {
+                popUpTo(Routes.LOGIN) { inclusive = true }
+            }
+            viewModel.justLoggedIn = false
+        }
+    }
+
+    Column {
+        OutlinedTextField(
+            value = formState.email,
+            onValueChange = { viewModel.onEmailChange(it) },
+            label = { Text("Correo") }
+        )
+
+        OutlinedTextField(
+            value = formState.password,
+            onValueChange = { viewModel.onPasswordChange(it) },
+            label = { Text("Contraseña") }
+        )
+
+        if (formState.loginError.isNotEmpty()) {
+            Text(formState.loginError, color = MaterialTheme.colorScheme.error)
+        }
+
+        Button(
+            onClick = { viewModel.login() },
+            enabled = !isLoading
+        ) {
+            Text("Iniciar sesión")
+        }
+    }
+}
+```
+
+## Dependencies
+
+- **AuthRepository**: Handles API authentication calls
+- **AuthDataStore**: Persists user credentials locally
+- **Application**: Provides application context
+
+## Initialization
+
+On initialization, the ViewModel attempts to restore the user session from DataStore:
+
+```kotlin
+init {
+    viewModelScope.launch {
+        val email = authDataStore.email.first() ?: ""
+        val role = authDataStore.role.first() ?: ""
+
+        if (email.isNotBlank() && role.isNotBlank()) {
+            _user.value = User(
+                id = 0L,
+                email = email,
+                role = if (role == "TRABAJADOR") Role.TRABAJADOR else Role.USUARIO
+            )
+        }
+    }
+}
+```
+
+## Related
+
+- [Usuario API Service](/api/usuarios)
+- [User Model](/api/models/user)
+- [Role Enum](/api/models/user#role)

@@ -1,0 +1,164 @@
+---
+title: 'QR Scanner'
+description: 'Learn how to use the QR code scanner to validate event tickets'
+---
+
+## Overview
+
+The QR Scanner feature allows workers to scan ticket QR codes using the device camera. It integrates with the ZXing barcode scanner library to provide a fast and reliable scanning experience for ticket validation.
+
+## Camera Permissions
+
+The application requires camera permissions to scan QR codes. This permission is declared in the AndroidManifest:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
+
+<Info>
+The camera permission is requested automatically when users first attempt to scan a QR code.
+</Info>
+
+## Scanner Screen Components
+
+### Scanner Activity
+
+The `ScannerActivity` extends `CaptureActivity` from the ZXing library and configures the camera orientation:
+
+```kotlin
+class ScannerActivity : CaptureActivity(){
+    override fun onCreate(savedInstanceState: Bundle?){
+        super.onCreate(savedInstanceState)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+}
+```
+
+<Note>
+The scanner is locked to portrait orientation for better usability during ticket validation.
+</Note>
+
+### Scanner Screen UI
+
+The `ScannerScreen` provides the main interface for QR code scanning:
+
+```kotlin
+@Composable
+fun ScannerScreen(
+    onBackClick: () -> Unit,
+    viewModel: ScannerViewModel = viewModel()
+) {
+    var mensaje by remember { mutableStateOf("Apunta la cámara al código QR de la entrada") }
+    val context = LocalContext.current
+    val qrLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        if (result.contents != null) {
+            if (NetworkUtils.isNetworkAvailable(context)) {
+                viewModel.validarEntrada(
+                    codigoQR = result.contents,
+                    hasInternet = hasInternet
+                )
+                mensaje = "Validando entrada..."
+            } else {
+                mensaje = "Sin conexion a internet"
+            }
+        } else {
+            mensaje = "No se detecto ningún codigo"
+        }
+    }
+    // ... UI implementation
+}
+```
+
+## Scanning Workflow
+
+<Steps>
+  <Step title="Launch Scanner">
+    Workers tap the "Iniciar Escaneo" button to launch the camera scanner with configured options.
+  </Step>
+  
+  <Step title="Configure Scanner Options">
+    The scanner is configured with specific settings for optimal QR code detection:
+    
+    ```kotlin
+    val options = ScanOptions().apply {
+        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+        setPrompt("Apunta al QR de la entrada para validar")
+        setCaptureActivity(ScannerActivity::class.java)
+        setBeepEnabled(true)
+        setBarcodeImageEnabled(true)
+        setOrientationLocked(true)
+    }
+    qrLauncher.launch(options)
+    ```
+  </Step>
+  
+  <Step title="Scan QR Code">
+    Workers point the camera at the ticket's QR code. The scanner provides audio feedback (beep) on successful scan.
+  </Step>
+  
+  <Step title="Internet Check">
+    Before validation, the app verifies internet connectivity to ensure the ticket can be validated against the server.
+  </Step>
+  
+  <Step title="Validate Ticket">
+    The scanned QR code is sent to the `ScannerViewModel` for validation, which communicates with the backend API.
+  </Step>
+</Steps>
+
+<Warning>
+The scanner requires an active internet connection to validate tickets. Offline scanning is not currently supported.
+</Warning>
+
+## Scanner Configuration Options
+
+The scanner supports several configuration options:
+
+| Option | Description | Value |
+|--------|-------------|-------|
+| `setDesiredBarcodeFormats` | Restricts scanning to QR codes only | `ScanOptions.QR_CODE` |
+| `setPrompt` | Sets the instruction text shown to users | Custom message |
+| `setBeepEnabled` | Enables audio feedback on scan | `true` |
+| `setBarcodeImageEnabled` | Saves scanned barcode image | `true` |
+| `setOrientationLocked` | Locks screen orientation | `true` |
+
+## Manual Validation Fallback
+
+In case the QR code cannot be scanned, workers have access to a manual validation option:
+
+```kotlin
+OutlinedButton(onClick = {
+    mensaje = "Introduce manualmente el codigo si procede."
+}) {
+    Text("Validacion Manual")
+}
+```
+
+<Info>
+Manual validation allows workers to type in the ticket code if the QR scanner fails or the code is damaged.
+</Info>
+
+## User Feedback
+
+The scanner provides real-time feedback through status messages:
+
+```kotlin
+if (mensajeOperacion.isNotEmpty()) {
+    Text(
+        text = mensajeOperacion,
+        style = MaterialTheme.typography.bodyLarge,
+        color = if (mensajeOperacion.contains("correctamente", ignoreCase = true))
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.error
+    )
+}
+```
+
+- **Success messages** appear in primary color (typically green)
+- **Error messages** appear in error color (typically red)
+
+## Next Steps
+
+<Card title="Ticket Validation" icon="check-circle" href="/features/ticket-validation">
+  Learn how scanned tickets are validated and marked as used
+</Card>

@@ -1,0 +1,529 @@
+---
+title: 'Shopping Cart & Checkout'
+description: 'Add tickets to cart, manage quantities, and complete purchases'
+---
+
+## Overview
+
+RegistroX features a robust shopping cart system that allows users to add multiple tickets, manage quantities, and complete purchases with automatic QR code generation for each ticket.
+
+<Note>
+All shopping cart operations require authentication and internet connectivity for purchase completion.
+</Note>
+
+## Shopping Cart Features
+
+<CardGroup cols={2}>
+  <Card title="Add to Cart" icon="cart-plus">
+    Add tickets with quantity selection
+  </Card>
+  <Card title="Quantity Management" icon="hashtag">
+    Update ticket quantities in cart
+  </Card>
+  <Card title="Cart Summary" icon="list">
+    View all items before checkout
+  </Card>
+  <Card title="Quick Checkout" icon="credit-card">
+    One-click purchase process
+  </Card>
+</CardGroup>
+
+## Cart Management
+
+The `CarritoViewModel` manages all shopping cart operations with reactive state updates.
+
+### Cart State
+
+```kotlin CarritoViewModel.kt:26
+val carrito = mutableStateListOf<Entrada>()
+val ticketsUsuario = mutableStateListOf<CompraEntrada>()
+val mensajeOperacion = mutableStateOf("")
+val isLoading = mutableStateOf(false)
+```
+
+### Adding Tickets
+
+Users can add tickets to their cart from the home screen:
+
+```kotlin CarritoViewModel.kt:33
+fun agregar(entrada: Entrada) {
+    val existente = carrito.find { it.id == entrada.id }
+    if (existente != null) {
+        val actualizado = existente.copy(cantidad = existente.cantidad + entrada.cantidad)
+        carrito.remove(existente)
+        carrito.add(actualizado)
+    } else carrito.add(entrada)
+    mensajeOperacion.value = "Entrada agregada al carrito"
+}
+```
+
+<Accordion title="Quantity Logic">
+  When adding a ticket that already exists in the cart:
+  - Find existing ticket by ID
+  - Create updated copy with increased quantity
+  - Remove old entry and add updated entry
+  - Show confirmation message
+  
+  If ticket is new:
+  - Add directly to cart
+  - Display success message
+</Accordion>
+
+## Cart Display
+
+The cart is displayed at the bottom of the home screen with action buttons:
+
+```kotlin HomeScreen.kt:101
+if (carritoViewModel.carrito.isNotEmpty()) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(
+            onClick = {
+                carritoViewModel.comprar()
+                navController.navigate(Routes.ENTRADAS) {
+                    popUpTo(Routes.HOME) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Text("Comprar (${carritoViewModel.carrito.size})")
+        }
+
+        Button(
+            onClick = { carritoViewModel.limpiar() },
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary
+            )
+        ) {
+            Text("Eliminar")
+        }
+    }
+}
+```
+
+### Cart Actions
+
+<CardGroup cols={2}>
+  <Card title="Purchase" icon="check">
+    Complete checkout and generate QR codes
+  </Card>
+  <Card title="Clear Cart" icon="trash">
+    Remove all items from cart
+  </Card>
+</CardGroup>
+
+## Checkout Process
+
+The checkout process creates a purchase record with unique QR codes for each ticket.
+
+### Purchase Flow
+
+<Steps>
+  <Step title="Validate Internet">
+    Check for active network connection
+  </Step>
+  <Step title="Retrieve User">
+    Get authenticated user email from DataStore
+  </Step>
+  <Step title="Fetch User Data">
+    Retrieve complete user information from API
+  </Step>
+  <Step title="Generate QR Codes">
+    Create unique QR code for each ticket
+  </Step>
+  <Step title="Create Purchase">
+    Send purchase data to backend API
+  </Step>
+  <Step title="Synchronize">
+    Update local ticket list with new purchases
+  </Step>
+  <Step title="Clear Cart">
+    Empty cart after successful purchase
+  </Step>
+</Steps>
+
+### Purchase Implementation
+
+```kotlin CarritoViewModel.kt:48
+fun comprar() {
+    viewModelScope.launch {
+        if (!NetworkUtils.isNetworkAvailable(context())) {
+            mensajeOperacion.value = "Sin conexion a internet"
+            return@launch
+        }
+
+        val email = authDataStore?.email?.firstOrNull() ?: run {
+            mensajeOperacion.value = "Error: usuario no encontrado"
+            return@launch
+        }
+
+        if (carrito.isEmpty()) {
+            mensajeOperacion.value = "No hay entradas en el carrito"
+            return@launch
+        }
+
+        try {
+            val usuarioResponse = withContext(Dispatchers.IO) {
+                RetrofitInstance.api.getUsuarios()
+            }
+
+            val usuarioExistente = if (usuarioResponse.isSuccessful) {
+                usuarioResponse.body()?.find { it.email.equals(email, ignoreCase = true) }
+            } else null
+
+            if (usuarioExistente == null) {
+                mensajeOperacion.value = "Error: usuario no encontrado en el servidor"
+                return@launch
+            }
+
+            val tickets = carrito.map { entrada ->
+                CompraEntrada(
+                    codigoQR = generarCodigoQRUnico(entrada.id, email),
+                    estado = "disponible",
+                    entrada = entrada
+                )
+            }
+
+            val compra = Compra(usuario = usuarioExistente, compraEntradas = tickets)
+
+            val response = withContext(Dispatchers.IO) {
+                RetrofitInstance.apiCompras.createCompra(compra)
+            }
+
+            if (response.isSuccessful) {
+                mensajeOperacion.value = "Compra registrada correctamente"
+                limpiar()
+                sincronizarEntradasDesdeApi(email)
+            } else {
+                mensajeOperacion.value = "Error al registrar compra (${response.code()})"
+            }
+        } catch (e: Exception) {
+            mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+        }
+    }
+}
+```
+
+## QR Code Generation
+
+Each purchased ticket receives a unique QR code for validation at event venues.
+
+### QR Code Format
+
+```kotlin CarritoViewModel.kt:43
+private fun generarCodigoQRUnico(entradaId: Long?, email: String): String {
+    val timestamp = System.currentTimeMillis()
+    return "QR-${email.hashCode()}-${entradaId ?: 0}-$timestamp"
+}
+```
+
+<Accordion title="QR Code Components">
+  The QR code ensures uniqueness through three components:
+  
+  **Email Hash**
+  - User email converted to hash code
+  - Provides user identification without exposing email
+  - Example: `123456789`
+  
+  **Ticket ID**
+  - Unique identifier for the ticket type
+  - Links QR to specific event
+  - Example: `42`
+  
+  **Timestamp**
+  - Purchase time in milliseconds
+  - Ensures absolute uniqueness even for duplicate purchases
+  - Example: `1678901234567`
+  
+  **Complete QR**: `QR-123456789-42-1678901234567`
+</Accordion>
+
+### Ticket Creation
+
+Each cart item is converted to a `CompraEntrada` with QR code:
+
+```kotlin CarritoViewModel.kt:79
+val tickets = carrito.map { entrada ->
+    CompraEntrada(
+        codigoQR = generarCodigoQRUnico(entrada.id, email),
+        estado = "disponible",
+        entrada = entrada
+    )
+}
+```
+
+## Purchase Data Model
+
+The purchase system uses structured data models for cart and purchase records:
+
+### Compra (Purchase) Model
+
+```kotlin Compra.kt:3
+data class Compra(
+    val id: Long? = null,
+    val fechaCompra: String? = null,
+    val usuario: Usuario,
+    val compraEntradas: List<CompraEntrada>? = emptyList()
+)
+```
+
+### CompraEntrada (Purchase Ticket) Model
+
+Each purchased ticket contains:
+- **codigoQR**: Unique QR code string
+- **estado**: Ticket state (disponible/ocupada)
+- **entrada**: Full ticket information
+
+## Cart Operations
+
+### Clear Cart
+
+Remove all items from the shopping cart:
+
+```kotlin CarritoViewModel.kt:132
+fun limpiar() {
+    carrito.clear()
+    mensajeOperacion.value = "Carrito vacio"
+}
+```
+
+### Update User Tickets
+
+Synchronize purchased tickets from the backend:
+
+```kotlin CarritoViewModel.kt:137
+fun actualizarUsuario() {
+    viewModelScope.launch {
+        if (!NetworkUtils.isNetworkAvailable(context())) {
+            mensajeOperacion.value = "Sin conexion a internet"
+            return@launch
+        }
+
+        isLoading.value = true
+        try {
+            ticketsUsuario.clear()
+            val email = authDataStore?.email?.firstOrNull()?.trim().orEmpty()
+            if (email.isBlank()) {
+                dataStore.clearEntradas("anonimo")
+                return@launch
+            }
+            sincronizarEntradasDesdeApi(email)
+        } finally {
+            isLoading.value = false
+        }
+    }
+}
+```
+
+## Synchronization
+
+After purchase, tickets are synchronized with the backend API to ensure data consistency.
+
+### Sync Process
+
+```kotlin CarritoViewModel.kt:106
+private suspend fun sincronizarEntradasDesdeApi(email: String) {
+    if (!NetworkUtils.isNetworkAvailable(context())) {
+        mensajeOperacion.value = "Sin conexión a internet"
+        return
+    }
+    try {
+        val repo = ComprasRepository()
+        val response = withContext(Dispatchers.IO) { repo.obtenerCompras() }
+
+        if (response.isSuccessful) {
+            val todas = response.body() ?: emptyList()
+            val comprasUsuario = todas.filter { it.usuario.email.equals(email, true) }
+            val ticketsUsuarioActual = comprasUsuario.flatMap { 
+                it.compraEntradas ?: emptyList() 
+            }
+
+            dataStore.saveEntradas(email, ticketsUsuarioActual.mapNotNull { it.entrada })
+            ticketsUsuario.clear()
+            ticketsUsuario.addAll(ticketsUsuarioActual)
+            mensajeOperacion.value = "Entradas sincronizadas correctamente"
+        } else {
+            mensajeOperacion.value = "Error al sincronizar (${response.code()})"
+        }
+    } catch (e: Exception) {
+        mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+    }
+}
+```
+
+### Data Persistence
+
+<CardGroup cols={2}>
+  <Card title="Local Storage" icon="database">
+    Tickets cached in DataStore for offline access
+  </Card>
+  <Card title="API Sync" icon="sync">
+    Regular synchronization with backend
+  </Card>
+  <Card title="User Filter" icon="filter">
+    Only user's tickets are stored locally
+  </Card>
+  <Card title="Auto-Update" icon="rotate">
+    Automatic refresh after purchases
+  </Card>
+</CardGroup>
+
+## Ticket Validation
+
+Workers can scan and validate QR codes, marking tickets as used.
+
+### Mark as Used
+
+```kotlin CarritoViewModel.kt:159
+fun marcarEntradaUsadaRemota(codigoQR: String) {
+    viewModelScope.launch {
+        if (!NetworkUtils.isNetworkAvailable(context())) {
+            mensajeOperacion.value = "Sin conexion a internet"
+            return@launch
+        }
+
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitInstance.apiEntradas.marcarEntradaUsada(codigoQR)
+            }
+            if (response.isSuccessful) {
+                val codigoLimpio = codigoQR.trim().uppercase()
+                val actualizados = ticketsUsuario.map {
+                    if (it.codigoQR?.uppercase() == codigoLimpio)
+                        it.copy(estado = "ocupada")
+                    else it
+                }
+                ticketsUsuario.clear()
+                ticketsUsuario.addAll(actualizados)
+                mensajeOperacion.value = response.body()?.get("mensaje") 
+                    ?: "Entrada validada correctamente"
+            } else {
+                mensajeOperacion.value = response.errorBody()?.string()
+                    ?: "Error al marcar la entrada como usada"
+            }
+        } catch (e: Exception) {
+            mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+        }
+    }
+}
+```
+
+### Remove Used Tickets
+
+Filter out used tickets from local storage:
+
+```kotlin CarritoViewModel.kt:190
+fun eliminarOcupadas() {
+    viewModelScope.launch {
+        val disponibles = ticketsUsuario.filter { it.estado.lowercase() != "ocupada" }
+        ticketsUsuario.clear()
+        ticketsUsuario.addAll(disponibles)
+        mensajeOperacion.value = "Entradas ocupadas eliminadas"
+    }
+}
+```
+
+## User Experience
+
+### Shopping Flow
+
+<Steps>
+  <Step title="Browse Tickets">
+    User views available tickets on home screen
+  </Step>
+  <Step title="Add to Cart">
+    User taps add button on desired tickets
+  </Step>
+  <Step title="Review Cart">
+    Cart summary shows at bottom with item count
+  </Step>
+  <Step title="Checkout">
+    User taps purchase button to complete order
+  </Step>
+  <Step title="Confirmation">
+    Success message displayed after purchase
+  </Step>
+  <Step title="Access Tickets">
+    Navigate to purchases to view QR codes
+  </Step>
+</Steps>
+
+## Error Handling
+
+The shopping cart system provides clear feedback for various scenarios:
+
+### Connection Errors
+
+- **No Internet**: "Sin conexion a internet"
+- **Network Error**: "Error de red: [details]"
+- **API Error**: "Error al registrar compra ([status code])"
+
+### User Errors
+
+- **Empty Cart**: "No hay entradas en el carrito"
+- **User Not Found**: "Error: usuario no encontrado"
+- **User Not in DB**: "Error: usuario no encontrado en el servidor"
+
+### Success Messages
+
+- **Item Added**: "Entrada agregada al carrito"
+- **Purchase Complete**: "Compra registrada correctamente"
+- **Cart Cleared**: "Carrito vacio"
+- **Sync Complete**: "Entradas sincronizadas correctamente"
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Internet Check" icon="wifi">
+    Always verify connectivity before operations
+  </Card>
+  <Card title="User Validation" icon="user-check">
+    Confirm user authentication before checkout
+  </Card>
+  <Card title="Error Recovery" icon="rotate-right">
+    Provide clear messages and retry options
+  </Card>
+  <Card title="State Sync" icon="arrows-rotate">
+    Keep local and remote data synchronized
+  </Card>
+</CardGroup>
+
+## Integration Points
+
+### Authentication Integration
+
+- Requires valid user session
+- Uses email from AuthDataStore
+- Validates user exists in backend
+
+### Navigation Integration
+
+- Cart displayed on home screen
+- Purchase redirects to tickets view
+- Maintains navigation state
+
+### API Integration
+
+- User lookup endpoint
+- Purchase creation endpoint
+- Ticket synchronization endpoint
+- QR validation endpoint
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="View Tickets" icon="ticket" href="/features/tickets">
+    Access your purchased tickets
+  </Card>
+  <Card title="Profile Settings" icon="user" href="/features/profile">
+    Manage your account
+  </Card>
+</CardGroup>

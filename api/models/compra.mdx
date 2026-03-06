@@ -1,0 +1,172 @@
+---
+title: 'Compra Models'
+description: 'Compra and CompraEntrada data models for purchase transactions and ticket instances'
+---
+
+## Compra
+
+The `Compra` model represents a purchase transaction in the RegistroX application. It contains information about the purchase date, the user who made the purchase, and all the ticket instances included in the transaction.
+
+```kotlin
+data class Compra(
+    val id: Long? = null,
+    val fechaCompra: String? = null,
+    val usuario: Usuario,
+    val compraEntradas: List<CompraEntrada>? = emptyList()
+)
+```
+
+### Fields
+
+<ResponseField name="id" type="Long">
+  Unique identifier for the purchase transaction (nullable for new purchases)
+</ResponseField>
+
+<ResponseField name="fechaCompra" type="String">
+  Date and time when the purchase was made (typically in ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="usuario" type="Usuario" required>
+  The user who made the purchase. See [Usuario](/api/models/user#usuario) model
+</ResponseField>
+
+<ResponseField name="compraEntradas" type="List<CompraEntrada>" default="emptyList()">
+  List of ticket instances included in this purchase. Each entry represents a specific ticket with its own QR code and state
+</ResponseField>
+
+## CompraEntrada
+
+The `CompraEntrada` model represents an individual ticket instance within a purchase. This model links a purchase to a specific ticket entry and includes its own QR code and status tracking.
+
+```kotlin
+data class CompraEntrada(
+    val id: Long? = null,
+    val estado: String = "disponible",
+    val codigoQR: String? = null,
+    val entrada: Entrada? = null
+)
+```
+
+### Fields
+
+<ResponseField name="id" type="Long">
+  Unique identifier for this ticket instance (nullable for new instances)
+</ResponseField>
+
+<ResponseField name="estado" type="String" default="disponible">
+  Current status of this specific ticket instance (e.g., "disponible", "usado", "cancelado")
+</ResponseField>
+
+<ResponseField name="codigoQR" type="String">
+  Unique QR code for this specific ticket instance used for validation (nullable until generated)
+</ResponseField>
+
+<ResponseField name="entrada" type="Entrada">
+  Reference to the ticket entry this instance is based on. See [Entrada](/api/models/entrada) model
+</ResponseField>
+
+## Purchase Flow
+
+The typical purchase flow involves these models:
+
+1. **Selection**: User browses available `Entrada` tickets
+2. **Purchase**: A `Compra` is created with the current user
+3. **Instance Creation**: For each ticket in the cart, a `CompraEntrada` is created with a unique QR code
+4. **Validation**: Workers scan the QR code to validate and mark the `CompraEntrada` as used
+
+## Usage Examples
+
+### Creating a New Purchase
+
+```kotlin
+val compra = Compra(
+    id = null,
+    fechaCompra = "2026-03-06T14:30:00Z",
+    usuario = Usuario(
+        id = 1L,
+        email = "user@example.com",
+        password = null,
+        rol = Rol(id = 2L, nombre = "USUARIO")
+    ),
+    compraEntradas = listOf(
+        CompraEntrada(
+            id = null,
+            estado = "disponible",
+            codigoQR = "QR-COMP-001-ENTRY-001",
+            entrada = Entrada(
+                id = 123L,
+                titulo = "Concierto Rock 2026",
+                lugar = "Estadio Nacional",
+                precio = 50.0,
+                estado = "vendido",
+                codigoQR = null,
+                cantidad = 1,
+                usuarioEmail = "user@example.com"
+            )
+        ),
+        CompraEntrada(
+            id = null,
+            estado = "disponible",
+            codigoQR = "QR-COMP-001-ENTRY-002",
+            entrada = Entrada(
+                id = 123L,
+                titulo = "Concierto Rock 2026",
+                lugar = "Estadio Nacional",
+                precio = 50.0,
+                estado = "vendido",
+                codigoQR = null,
+                cantidad = 1,
+                usuarioEmail = "user@example.com"
+            )
+        )
+    )
+)
+```
+
+### Purchase with Used Tickets
+
+```kotlin
+val compraConEntradasUsadas = Compra(
+    id = 45L,
+    fechaCompra = "2026-03-05T18:00:00Z",
+    usuario = Usuario(
+        id = 1L,
+        email = "user@example.com",
+        password = null,
+        rol = Rol(id = 2L, nombre = "USUARIO")
+    ),
+    compraEntradas = listOf(
+        CompraEntrada(
+            id = 101L,
+            estado = "usado",
+            codigoQR = "QR-COMP-045-ENTRY-001",
+            entrada = Entrada(
+                id = 200L,
+                titulo = "Festival de Música",
+                lugar = "Parque Central",
+                precio = 75.0,
+                estado = "usado",
+                codigoQR = null,
+                cantidad = 1,
+                usuarioEmail = "user@example.com"
+            )
+        )
+    )
+)
+```
+
+## Ticket Instance States
+
+Each `CompraEntrada` tracks its own state independently:
+
+| Estado | Description |
+|--------|-------------|
+| `disponible` | Ticket instance is ready to be used |
+| `usado` | Ticket instance has been scanned and used for entry |
+| `cancelado` | Ticket instance has been cancelled or refunded |
+
+## Related Models
+
+- [Usuario](/api/models/user#usuario) - User who made the purchase
+- [Entrada](/api/models/entrada) - Base ticket information
+- [Rol](/api/models/user#rol) - User role information

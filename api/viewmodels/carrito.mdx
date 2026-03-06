@@ -1,0 +1,298 @@
+---
+title: "CarritoViewModel"
+description: "ViewModel for managing shopping cart and ticket purchases in RegistroX"
+---
+
+## Overview
+
+The `CarritoViewModel` manages the shopping cart functionality, ticket purchases, and user ticket synchronization. It handles adding items to the cart, processing purchases through the API, and managing ticket state (available/occupied).
+
+## Properties
+
+### Observable State
+
+<ParamField path="carrito" type="SnapshotStateList<Entrada>">
+  List of tickets currently in the shopping cart
+</ParamField>
+
+<ParamField path="ticketsUsuario" type="SnapshotStateList<CompraEntrada>">
+  List of tickets owned by the current user
+</ParamField>
+
+<ParamField path="mensajeOperacion" type="MutableState<String>">
+  Status message for the last operation performed
+</ParamField>
+
+<ParamField path="isLoading" type="MutableState<Boolean>">
+  Loading state during operations
+</ParamField>
+
+## Methods
+
+### agregar
+
+Adds a ticket to the shopping cart. If the ticket already exists, increments its quantity.
+
+```kotlin
+fun agregar(entrada: Entrada)
+```
+
+<ParamField path="entrada" type="Entrada">
+  The ticket to add to the cart
+</ParamField>
+
+**Behavior:**
+- If ticket exists: Merges quantities
+- If new ticket: Adds to cart
+- Updates `mensajeOperacion` with confirmation
+
+**Usage Example:**
+
+```kotlin
+Button(onClick = {
+    carritoViewModel.agregar(
+        Entrada(
+            id = 1,
+            titulo = "Concierto Rock",
+            lugar = "Estadio Nacional",
+            precio = 50.0,
+            estado = "disponible",
+            cantidad = 1
+        )
+    )
+}) {
+    Text("Agregar al carrito")
+}
+```
+
+### comprar
+
+Processes the purchase of all items in the cart.
+
+```kotlin
+fun comprar()
+```
+
+**Behavior:**
+1. Validates network connectivity
+2. Retrieves current user email from DataStore
+3. Validates cart is not empty
+4. Fetches user from API
+5. Generates unique QR codes for each ticket
+6. Creates purchase record with `CompraEntrada` items
+7. Sends purchase to API
+8. On success:
+   - Clears cart
+   - Synchronizes tickets from API
+   - Updates `mensajeOperacion`
+
+**Usage Example:**
+
+```kotlin
+val mensaje by carritoViewModel.mensajeOperacion
+
+Button(onClick = { carritoViewModel.comprar() }) {
+    Text("Finalizar compra")
+}
+
+if (mensaje.isNotEmpty()) {
+    Text(mensaje)
+}
+```
+
+<Note>
+  The purchase requires internet connectivity. The method will fail gracefully if offline.
+</Note>
+
+### limpiar
+
+Clears all items from the shopping cart.
+
+```kotlin
+fun limpiar()
+```
+
+**Usage Example:**
+
+```kotlin
+Button(onClick = { carritoViewModel.limpiar() }) {
+    Text("Vaciar carrito")
+}
+```
+
+### actualizarUsuario
+
+Synchronizes the user's tickets from the API.
+
+```kotlin
+fun actualizarUsuario()
+```
+
+**Behavior:**
+1. Validates network connectivity
+2. Sets loading state
+3. Retrieves user email from DataStore
+4. Calls `sincronizarEntradasDesdeApi()`
+5. Updates `ticketsUsuario` with API data
+
+**Usage Example:**
+
+```kotlin
+LaunchedEffect(Unit) {
+    carritoViewModel.actualizarUsuario()
+}
+
+if (carritoViewModel.isLoading.value) {
+    CircularProgressIndicator()
+}
+```
+
+### marcarEntradaUsadaRemota
+
+Marks a ticket as used via its QR code.
+
+```kotlin
+fun marcarEntradaUsadaRemota(codigoQR: String)
+```
+
+<ParamField path="codigoQR" type="String">
+  The unique QR code of the ticket to mark as used
+</ParamField>
+
+**Behavior:**
+1. Validates network connectivity
+2. Calls API to mark ticket as "ocupada"
+3. Updates local `ticketsUsuario` state
+4. Returns success/error message
+
+**Usage Example:**
+
+```kotlin
+// After scanning a QR code
+val scannedCode = "QR-12345-1-1234567890"
+
+Button(onClick = {
+    carritoViewModel.marcarEntradaUsadaRemota(scannedCode)
+}) {
+    Text("Validar entrada")
+}
+
+Text(carritoViewModel.mensajeOperacion.value)
+```
+
+<Note>
+  This method is typically used by worker accounts to validate tickets at entry points.
+</Note>
+
+### eliminarOcupadas
+
+Removes all used tickets from the user's ticket list.
+
+```kotlin
+fun eliminarOcupadas()
+```
+
+**Behavior:**
+- Filters `ticketsUsuario` to keep only "disponible" tickets
+- Updates state and message
+
+**Usage Example:**
+
+```kotlin
+Button(onClick = { carritoViewModel.eliminarOcupadas() }) {
+    Text("Limpiar entradas usadas")
+}
+```
+
+## Complete Usage Example
+
+```kotlin
+@Composable
+fun HomeScreen(
+    navController: NavController,
+    carritoViewModel: CarritoViewModel
+) {
+    val carrito = carritoViewModel.carrito
+    val mensaje = carritoViewModel.mensajeOperacion.value
+
+    LaunchedEffect(Unit) {
+        carritoViewModel.actualizarUsuario()
+    }
+
+    Column {
+        // Display available tickets
+        LazyColumn {
+            items(entradas) { entrada ->
+                EntradaCard(
+                    entrada = entrada,
+                    onAddToCart = { carritoViewModel.agregar(it) }
+                )
+            }
+        }
+
+        // Cart summary
+        Text("Items en carrito: ${carrito.size}")
+        
+        Row {
+            Button(onClick = { carritoViewModel.comprar() }) {
+                Text("Comprar (${carrito.size})")
+            }
+            
+            Button(onClick = { carritoViewModel.limpiar() }) {
+                Text("Vaciar carrito")
+            }
+        }
+
+        if (mensaje.isNotEmpty()) {
+            Text(mensaje)
+        }
+    }
+}
+```
+
+## QR Code Generation
+
+The ViewModel generates unique QR codes for purchased tickets:
+
+```kotlin
+private fun generarCodigoQRUnico(entradaId: Long?, email: String): String {
+    val timestamp = System.currentTimeMillis()
+    return "QR-${email.hashCode()}-${entradaId ?: 0}-$timestamp"
+}
+```
+
+**Format:** `QR-[emailHash]-[entradaId]-[timestamp]`
+
+## Network Handling
+
+All network operations include connectivity checks:
+
+```kotlin
+if (!NetworkUtils.isNetworkAvailable(context())) {
+    mensajeOperacion.value = "Sin conexion a internet"
+    return@launch
+}
+```
+
+## Dependencies
+
+- **EntradasDataStore**: Persists tickets locally
+- **AuthDataStore**: Retrieves current user email
+- **ComprasRepository**: Handles purchase API calls
+- **RetrofitInstance**: API client
+- **Application**: Provides application context
+
+## Error Handling
+
+The ViewModel handles errors gracefully:
+
+- Network errors: Display "Sin conexion a internet"
+- API errors: Display response code or error body
+- User not found: Display "Error: usuario no encontrado"
+- Empty cart: Display "No hay entradas en el carrito"
+
+## Related
+
+- [Entrada Model](/api/models/entrada)
+- [CompraEntrada Model](/api/models/compra#compraentrada)
+- [Compras API Service](/api/compras)

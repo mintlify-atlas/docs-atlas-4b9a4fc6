@@ -1,0 +1,125 @@
+---
+title: 'User Models'
+description: 'User, Usuario, Role, and Rol data models for authentication and authorization'
+---
+
+## User
+
+The `User` model represents an authenticated user in the application. This is the simplified user model used for authentication responses.
+
+```kotlin
+data class User(
+    val id: Long = 0,
+    val email: String,
+    val role: Role
+)
+```
+
+### Fields
+
+<ResponseField name="id" type="Long" default="0">
+  Unique identifier for the user
+</ResponseField>
+
+<ResponseField name="email" type="String" required>
+  User's email address used for authentication
+</ResponseField>
+
+<ResponseField name="role" type="Role" required>
+  User's role determining access permissions. See [Role](#role) enum below
+</ResponseField>
+
+## Usuario
+
+The `Usuario` model represents a complete user profile with role information. This is the full user model used throughout the application.
+
+```kotlin
+data class Usuario(
+    val id: Long? = null,
+    val email: String,
+    val password: String? = null,
+    val rol: Rol
+)
+```
+
+### Fields
+
+<ResponseField name="id" type="Long">
+  Unique identifier for the user (nullable)
+</ResponseField>
+
+<ResponseField name="email" type="String" required>
+  User's email address
+</ResponseField>
+
+<ResponseField name="password" type="String">
+  User's password (nullable, typically excluded from responses for security)
+</ResponseField>
+
+<ResponseField name="rol" type="Rol" required>
+  User's role with detailed information. See [Rol](#rol) model below
+</ResponseField>
+
+## Rol
+
+The `Rol` model represents detailed role information for a user.
+
+```kotlin
+data class Rol(
+    val id: Long? = null,
+    val nombre: String? = null
+)
+```
+
+### Fields
+
+<ResponseField name="id" type="Long">
+  Unique identifier for the role
+</ResponseField>
+
+<ResponseField name="nombre" type="String">
+  Name of the role (e.g., "TRABAJADOR", "USUARIO")
+</ResponseField>
+
+## Role
+
+The `Role` enum defines the available user roles in the application.
+
+```kotlin
+enum class Role {
+    TRABAJADOR,
+    USUARIO
+}
+```
+
+### Values
+
+<ResponseField name="TRABAJADOR" type="enum">
+  Worker role with elevated permissions for ticket scanning and validation
+</ResponseField>
+
+<ResponseField name="USUARIO" type="enum">
+  Standard user role for purchasing and managing tickets
+</ResponseField>
+
+## Usage Example
+
+```kotlin
+// Creating a User instance
+val user = User(
+    id = 1L,
+    email = "user@example.com",
+    role = Role.USUARIO
+)
+
+// Creating a Usuario instance with Rol
+val usuario = Usuario(
+    id = 1L,
+    email = "user@example.com",
+    password = null, // Password should not be exposed
+    rol = Rol(
+        id = 2L,
+        nombre = "USUARIO"
+    )
+)
+```

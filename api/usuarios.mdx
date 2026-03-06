@@ -1,0 +1,308 @@
+---
+title: 'Usuario API'
+description: 'API endpoints for managing users and profile images in RegistroX'
+---
+
+## Get All Users
+
+Retrieves a list of all registered users in the system.
+
+```kotlin
+@GET("/api/v1/usuarios")
+suspend fun getUsuarios(): Response<List<Usuario>>
+```
+
+### HTTP Request
+
+`GET /api/v1/usuarios`
+
+### Response
+
+<ResponseField name="users" type="Array<Usuario>">
+  List of all users in the system
+  
+  <Expandable title="Usuario properties">
+    <ResponseField name="id" type="Long">
+      Unique identifier for the user
+    </ResponseField>
+    
+    <ResponseField name="email" type="String" required>
+      User's email address
+    </ResponseField>
+    
+    <ResponseField name="password" type="String">
+      User's password (returned only in specific contexts)
+    </ResponseField>
+    
+    <ResponseField name="rol" type="Rol" required>
+      User's role in the system
+      
+      <Expandable title="Rol properties">
+        <ResponseField name="id" type="Long">
+          Role identifier
+        </ResponseField>
+        
+        <ResponseField name="nombre" type="String">
+          Role name (e.g., "ADMIN", "USER")
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "email": "usuario@example.com",
+    "rol": {
+      "id": 2,
+      "nombre": "USER"
+    }
+  },
+  {
+    "id": 2,
+    "email": "admin@example.com",
+    "rol": {
+      "id": 1,
+      "nombre": "ADMIN"
+    }
+  }
+]
+```
+
+---
+
+## Create User
+
+Creates a new user account in the system.
+
+```kotlin
+@POST("/api/v1/usuarios")
+suspend fun createUsuario(@Body usuario: Usuario): Response<Usuario>
+```
+
+### HTTP Request
+
+`POST /api/v1/usuarios`
+
+### Request Body
+
+<ParamField body="email" type="String" required>
+  User's email address (must be unique)
+</ParamField>
+
+<ParamField body="password" type="String" required>
+  User's password
+</ParamField>
+
+<ParamField body="rol" type="Rol" required>
+  User's role assignment
+  
+  <Expandable title="Rol properties">
+    <ParamField body="id" type="Long">
+      Role identifier
+    </ParamField>
+    
+    <ParamField body="nombre" type="String">
+      Role name
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "email": "nuevo@example.com",
+  "password": "securePassword123",
+  "rol": {
+    "id": 2,
+    "nombre": "USER"
+  }
+}
+```
+
+### Response
+
+<ResponseField name="user" type="Usuario">
+  The newly created user object
+  
+  <Expandable title="Usuario properties">
+    <ResponseField name="id" type="Long">
+      Assigned unique identifier
+    </ResponseField>
+    
+    <ResponseField name="email" type="String">
+      User's email address
+    </ResponseField>
+    
+    <ResponseField name="rol" type="Rol">
+      User's assigned role
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "id": 3,
+  "email": "nuevo@example.com",
+  "rol": {
+    "id": 2,
+    "nombre": "USER"
+  }
+}
+```
+
+---
+
+## Get Profile Images
+
+Retrieves all profile images stored in the system.
+
+```kotlin
+@GET("api/v1/imagenes")
+suspend fun getImagenes(): Response<List<ImagenPerfil>>
+```
+
+### HTTP Request
+
+`GET /api/v1/imagenes`
+
+### Response
+
+<ResponseField name="images" type="Array<ImagenPerfil>">
+  List of all profile images
+  
+  <Expandable title="ImagenPerfil properties">
+    <ResponseField name="id" type="Long">
+      Unique identifier for the image
+    </ResponseField>
+    
+    <ResponseField name="imageUrl" type="String" required>
+      URL or path to the profile image
+    </ResponseField>
+    
+    <ResponseField name="usuario" type="Usuario" required>
+      The user associated with this profile image
+      
+      <Expandable title="Usuario properties">
+        <ResponseField name="id" type="Long">
+          User identifier
+        </ResponseField>
+        
+        <ResponseField name="email" type="String">
+          User's email
+        </ResponseField>
+        
+        <ResponseField name="rol" type="Rol">
+          User's role
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "imageUrl": "/uploads/profile_1.jpg",
+    "usuario": {
+      "id": 1,
+      "email": "usuario@example.com",
+      "rol": {
+        "id": 2,
+        "nombre": "USER"
+      }
+    }
+  }
+]
+```
+
+---
+
+## Upload Profile Image
+
+Uploads a profile image for a specific user using multipart form data.
+
+```kotlin
+@Multipart
+@POST("api/v1/imagenes/upload")
+suspend fun subirImagenMultipart(
+    @Part file: MultipartBody.Part,
+    @Query("usuarioId") usuarioId: Long
+): Response<ImagenPerfil>
+```
+
+### HTTP Request
+
+`POST /api/v1/imagenes/upload?usuarioId={usuarioId}`
+
+### Query Parameters
+
+<ParamField query="usuarioId" type="Long" required>
+  The ID of the user for whom the image is being uploaded
+</ParamField>
+
+### Request Body
+
+<ParamField body="file" type="MultipartBody.Part" required>
+  The image file to upload (multipart form data)
+  
+  Supported formats: JPG, JPEG, PNG, GIF
+</ParamField>
+
+### Example Request
+
+```kotlin
+// Android/Kotlin example
+val file = File(imagePath)
+val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
+
+val response = usuarioApiService.subirImagenMultipart(body, usuarioId = 1)
+```
+
+### Response
+
+<ResponseField name="image" type="ImagenPerfil">
+  The uploaded profile image information
+  
+  <Expandable title="ImagenPerfil properties">
+    <ResponseField name="id" type="Long">
+      Assigned unique identifier for the image
+    </ResponseField>
+    
+    <ResponseField name="imageUrl" type="String">
+      URL or path where the image is stored
+    </ResponseField>
+    
+    <ResponseField name="usuario" type="Usuario">
+      The user associated with this image
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "id": 2,
+  "imageUrl": "/uploads/profile_1_1678901234.jpg",
+  "usuario": {
+    "id": 1,
+    "email": "usuario@example.com",
+    "rol": {
+      "id": 2,
+      "nombre": "USER"
+    }
+  }
+}
+```

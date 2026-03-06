@@ -1,0 +1,420 @@
+---
+title: Running the App
+description: Build and run RegistroX on Android emulators and physical devices
+---
+
+## Overview
+
+This guide covers building RegistroX, running it on emulators and physical devices, and troubleshooting common issues.
+
+## Building the Application
+
+### Using Android Studio
+
+<Steps>
+  <Step title="Open Project">
+    1. Launch Android Studio
+    2. Select **File > Open**
+    3. Navigate to the RegistroX project directory
+    4. Wait for Gradle sync to complete
+  </Step>
+
+  <Step title="Build Debug Version">
+    Build the debug version of the app:
+    
+    - **Menu**: Select **Build > Make Project** (Ctrl+F9 / Cmd+F9)
+    - **Build Variants**: Ensure "debug" is selected in the Build Variants panel
+    
+    <Note>
+      The initial build may take 5-10 minutes as Gradle downloads dependencies.
+    </Note>
+  </Step>
+
+  <Step title="Generate APK">
+    To create an installable APK:
+    
+    1. Select **Build > Build Bundle(s) / APK(s) > Build APK(s)**
+    2. Wait for the build to complete
+    3. Click **locate** in the notification to find the APK
+    
+    The APK will be located at:
+    ```
+    app/build/outputs/apk/debug/app-debug.apk
+    ```
+  </Step>
+</Steps>
+
+### Using Gradle Command Line
+
+<CodeGroup>
+```bash Debug Build
+# Build debug APK
+./gradlew assembleDebug
+
+# Output location:
+# app/build/outputs/apk/debug/app-debug.apk
+```
+
+```bash Release Build
+# Build release APK (requires signing)
+./gradlew assembleRelease
+
+# Output location:
+# app/build/outputs/apk/release/app-release.apk
+```
+
+```bash Windows
+# Build debug APK on Windows
+gradlew.bat assembleDebug
+```
+
+```bash Clean Build
+# Clean and rebuild
+./gradlew clean assembleDebug
+```
+</CodeGroup>
+
+## Running on Android Emulator
+
+### Create an Emulator
+
+<Steps>
+  <Step title="Open AVD Manager">
+    In Android Studio, select **Tools > Device Manager** or click the device icon in the toolbar.
+  </Step>
+
+  <Step title="Create Virtual Device">
+    1. Click **Create Device**
+    2. Select a device definition (recommended: **Pixel 5** or newer)
+    3. Click **Next**
+  </Step>
+
+  <Step title="Select System Image">
+    Choose an Android system image:
+    
+    - **Recommended**: API 34 (Android 14) or API 33 (Android 13)
+    - **Minimum**: API 24 (Android 7.0)
+    - Select an image with Google Play (x86_64 architecture)
+    
+    <Note>
+      Download the system image if not already installed (this may take several minutes).
+    </Note>
+  </Step>
+
+  <Step title="Configure AVD">
+    Configure emulator settings:
+    
+    - **Name**: RegistroX Test Device
+    - **Orientation**: Portrait (locked)
+    - **RAM**: 2048 MB minimum
+    - Enable **Hardware > Camera** for QR scanning
+    
+    Click **Finish** to create the emulator.
+  </Step>
+</Steps>
+
+### Launch on Emulator
+
+<Steps>
+  <Step title="Start Emulator">
+    - Select your emulator from the device dropdown
+    - Click the **Run** button (▶) or press Shift+F10 (Shift+Cmd+R on Mac)
+    - Wait for the emulator to boot (first boot may take 2-3 minutes)
+  </Step>
+
+  <Step title="Install and Launch">
+    Android Studio will automatically:
+    1. Build the APK
+    2. Install it on the emulator
+    3. Launch the app
+    
+    <Note>
+      The app will open to the login screen. Check Logcat for initialization logs.
+    </Note>
+  </Step>
+</Steps>
+
+### Emulator Tips
+
+<CodeGroup>
+```bash Command Line Launch
+# List available emulators
+emulator -list-avds
+
+# Launch specific emulator
+emulator -avd "RegistroX_Test_Device"
+
+# Launch with cold boot
+emulator -avd "RegistroX_Test_Device" -no-snapshot-load
+```
+
+```bash Install APK Manually
+# Install APK to running emulator
+adb install app/build/outputs/apk/debug/app-debug.apk
+
+# Reinstall (preserves data)
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+</CodeGroup>
+
+<Warning>
+  QR code scanning requires camera support. Use a physical device for full QR functionality, or use the emulator's virtual camera.
+</Warning>
+
+## Running on Physical Device
+
+### Enable Developer Options
+
+<Steps>
+  <Step title="Enable Developer Mode">
+    On your Android device:
+    
+    1. Open **Settings > About Phone**
+    2. Tap **Build Number** 7 times
+    3. Enter your PIN/password if prompted
+    4. You'll see "You are now a developer!"
+  </Step>
+
+  <Step title="Enable USB Debugging">
+    1. Go to **Settings > System > Developer Options**
+    2. Enable **USB Debugging**
+    3. Enable **Install via USB** (if available)
+  </Step>
+
+  <Step title="Connect Device">
+    1. Connect your device via USB cable
+    2. On the device, tap **Allow** when prompted for USB debugging
+    3. Check "Always allow from this computer" (optional)
+    
+    Verify connection:
+    ```bash
+    adb devices
+    # Should list your device
+    ```
+  </Step>
+</Steps>
+
+### Deploy to Device
+
+<Steps>
+  <Step title="Select Device">
+    In Android Studio:
+    1. Your device should appear in the device dropdown
+    2. Select your physical device
+  </Step>
+
+  <Step title="Run App">
+    - Click the **Run** button (▶) or press Shift+F10
+    - The app will build, install, and launch on your device
+    
+    <Note>
+      You may need to unlock your device and grant permissions on first launch.
+    </Note>
+  </Step>
+</Steps>
+
+### Physical Device Benefits
+
+<Note>
+  Physical devices provide the best testing experience:
+  - Real camera for QR code scanning
+  - Accurate performance metrics
+  - True network conditions
+  - Actual hardware sensors
+</Note>
+
+## Testing Features
+
+### Test QR Code Scanning
+
+<Steps>
+  <Step title="Grant Camera Permission">
+    On first launch, the app will request camera permission. Tap **Allow**.
+  </Step>
+
+  <Step title="Scan Test QR Code">
+    Navigate to the scanner screen and point the camera at a QR code containing ticket data.
+  </Step>
+</Steps>
+
+### Test API Connectivity
+
+Monitor API calls in Android Studio's Logcat:
+
+```
+Filter: "OkHttp"
+Level: Debug
+```
+
+You should see HTTP requests and responses:
+```
+D/OkHttp: --> GET https://api-rest-registrox.onrender.com/entradas
+D/OkHttp: <-- 200 OK (1234ms)
+```
+
+## Troubleshooting
+
+### Build Errors
+
+<Warning>
+  **Error: Unsupported Java version**
+  
+  Solution:
+  1. Go to **Settings > Build > Gradle**
+  2. Set **Gradle JDK** to version 11
+  3. Click **Apply** and sync
+</Warning>
+
+<Warning>
+  **Error: SDK not found**
+  
+  Solution:
+  1. Open **Tools > SDK Manager**
+  2. Install Android SDK Platform 36 (API level 36)
+  3. Install Android SDK Build-Tools
+  4. Sync Gradle
+</Warning>
+
+### Runtime Errors
+
+<CodeGroup>
+```kotlin Network Error
+// Issue: Cannot connect to API
+// Check:
+1. Verify BASE_URL in RetrofitInstance.kt
+2. Check network permissions in AndroidManifest.xml
+3. For localhost, use 10.0.2.2 instead of localhost
+4. Ensure network_security_config.xml allows cleartext (dev only)
+```
+
+```kotlin Camera Error
+// Issue: QR scanner crashes
+// Check:
+1. Camera permission granted in app settings
+2. <uses-permission android:name="android.permission.CAMERA" /> in manifest
+3. Test on physical device (emulator camera may be limited)
+```
+
+```kotlin Compose Error
+// Issue: UI not rendering correctly
+// Check:
+1. Compose BOM version compatibility
+2. Clear build cache: ./gradlew clean
+3. Invalidate caches: File > Invalidate Caches > Invalidate and Restart
+```
+</CodeGroup>
+
+### Performance Issues
+
+<Steps>
+  <Step title="Enable R8 (Release Only)">
+    Verify R8 code shrinking is enabled for release builds:
+    
+    ```kotlin build.gradle.kts
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Monitor Memory">
+    Use Android Studio Profiler:
+    1. Select **View > Tool Windows > Profiler**
+    2. Click **+** and select your device
+    3. Monitor CPU, Memory, and Network usage
+  </Step>
+</Steps>
+
+### ADB Issues
+
+<CodeGroup>
+```bash Device Not Detected
+# Restart ADB server
+adb kill-server
+adb start-server
+
+# Check connected devices
+adb devices
+```
+
+```bash Multiple Devices
+# Install to specific device
+adb -s <device-id> install app-debug.apk
+
+# Run app on specific device
+adb -s <device-id> shell am start -n com.example.registrox_proyecto/.MainActivity
+```
+
+```bash Clear App Data
+# Clear app data and cache
+adb shell pm clear com.example.registrox_proyecto
+
+# Uninstall app
+adb uninstall com.example.registrox_proyecto
+```
+</CodeGroup>
+
+## Debugging Tools
+
+### Logcat Filters
+
+Useful Logcat filters for debugging:
+
+| Filter | Purpose |
+|--------|----------|
+| `package:mine` | Show only app logs |
+| `tag:OkHttp` | HTTP requests/responses |
+| `tag:Compose` | Compose UI logs |
+| `level:error` | Errors only |
+
+### Useful ADB Commands
+
+<CodeGroup>
+```bash Logging
+# View real-time logs
+adb logcat | grep "registrox"
+
+# Save logs to file
+adb logcat -d > app_logs.txt
+
+# Clear log buffer
+adb logcat -c
+```
+
+```bash App Management
+# Force stop app
+adb shell am force-stop com.example.registrox_proyecto
+
+# Launch app
+adb shell am start -n com.example.registrox_proyecto/.MainActivity
+
+# Check app info
+adb shell dumpsys package com.example.registrox_proyecto
+```
+
+```bash File Management
+# Pull app database
+adb pull /data/data/com.example.registrox_proyecto/databases/
+
+# Pull shared preferences
+adb pull /data/data/com.example.registrox_proyecto/shared_prefs/
+```
+</CodeGroup>
+
+## Next Steps
+
+Now that you have RegistroX running:
+
+- Explore the [Architecture](/architecture) to understand the app structure
+- Learn about [API Integration](/api/usuarios) for backend connectivity
+- Review [Development Guidelines](/development/project-structure) for contributing to the project
+
+<Note>
+  For production deployment, ensure you configure proper signing keys and update the API endpoint to your production server.
+</Note>

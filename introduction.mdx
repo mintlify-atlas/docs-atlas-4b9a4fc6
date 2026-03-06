@@ -1,0 +1,119 @@
+---
+title: "Welcome to RegistroX"
+description: "Event ticket management made simple with QR code scanning and role-based access control"
+---
+
+<img
+  className="block"
+  src="/logo.png"
+  alt="RegistroX Logo"
+  style={{ width: '200px', margin: '0 auto 2rem' }}
+/>
+
+# Welcome to RegistroX
+
+RegistroX is a modern Android mobile application for event ticket management, designed to streamline the entire ticket lifecycle from purchase to validation.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/getting-started/installation"
+  >
+    Get RegistroX up and running in minutes
+  </Card>
+  <Card
+    title="Key Features"
+    icon="star"
+    href="/features"
+  >
+    Explore what makes RegistroX powerful
+  </Card>
+  <Card
+    title="Architecture"
+    icon="diagram-project"
+    href="/architecture"
+  >
+    Learn about the technical design
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/usuarios"
+  >
+    Detailed API documentation
+  </Card>
+</CardGroup>
+
+## What is RegistroX?
+
+RegistroX is a comprehensive ticket management solution built with modern Android technologies. It enables users to browse events, purchase tickets, and manage their ticket collection, while providing event workers with powerful tools for ticket validation via QR code scanning.
+
+<Note>
+  RegistroX uses Jetpack Compose for a modern, reactive UI and follows MVVM architecture for clean, maintainable code.
+</Note>
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="User Authentication" icon="shield-check">
+    Secure login and registration with OTP verification
+  </Card>
+  <Card title="Role-Based Access" icon="users">
+    Separate interfaces for regular users and event workers
+  </Card>
+  <Card title="Ticket Management" icon="ticket">
+    Browse, purchase, and manage event tickets
+  </Card>
+  <Card title="QR Code Scanning" icon="qrcode">
+    Validate tickets instantly with built-in QR scanner
+  </Card>
+  <Card title="Shopping Cart" icon="cart-shopping">
+    Local persistence with DataStore for offline support
+  </Card>
+  <Card title="Profile Management" icon="user">
+    Update profile information and upload photos
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+RegistroX is built with cutting-edge Android technologies:
+
+- **Jetpack Compose** - Modern declarative UI framework
+- **Kotlin** - Primary programming language
+- **MVVM Architecture** - Clean separation of concerns
+- **Retrofit** - Type-safe HTTP client for API calls
+- **DataStore** - Persistent local storage for user sessions
+- **Navigation Component** - Modern navigation patterns
+- **Kotlin Flow** - Reactive data streams
+
+## User Roles
+
+### Regular Users
+Browse available tickets, add them to a shopping cart, complete purchases, and access purchased tickets with QR codes for event entry.
+
+### Event Workers
+Access specialized scanning interface to validate tickets at event entrances using the built-in QR code scanner.
+
+## Next Steps
+
+<Steps>
+  <Step title="Install the Application">
+    Follow our [installation guide](/getting-started/installation) to set up the development environment
+  </Step>
+  <Step title="Configure the Backend">
+    Set up the API endpoints in the [configuration](/getting-started/configuration)
+  </Step>
+  <Step title="Run the App">
+    Build and run RegistroX on your Android device or emulator
+  </Step>
+</Steps>
+
+<Card
+  title="View on GitHub"
+  icon="github"
+  href="https://github.com/eduardo-fernandezC/RegistroX-Proyecto-"
+>
+  Explore the source code and contribute to the project
+</Card>

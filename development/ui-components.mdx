@@ -1,0 +1,409 @@
+---
+title: "UI Components"
+description: "Reusable Compose components including TopBar, BottomBar, and Cards"
+---
+
+## Component Architecture
+
+RegistroX uses Jetpack Compose for building declarative UI. All components are stateless composables that accept parameters and callbacks, following composition over inheritance.
+
+## Top App Bars
+
+The app includes three variants of the top app bar, each designed for specific screens.
+
+<Accordion title="DefaultTopBar">
+A basic top bar with optional back navigation:
+
+```kotlin TopBar.kt
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DefaultTopBar(
+    title: String,
+    onBackClick: (() -> Unit)? = null
+) {
+    TopAppBar(
+        title = {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        },
+        navigationIcon = {
+            if (onBackClick != null) {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Atras",
+                        tint = Color.White
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        )
+    )
+}
+```
+
+**Usage:**
+```kotlin
+DefaultTopBar(
+    title = "RegistroX",
+    onBackClick = { navController.popBackStack() }
+)
+```
+</Accordion>
+
+<Accordion title="HomeTopBar">
+Home screen top bar with shopping cart badge:
+
+```kotlin TopBar.kt
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeTopBar(
+    carritoCount: Int = 0,
+    onCarritoClick: () -> Unit = {}
+) {
+    TopAppBar(
+        title = {
+            Text(
+                text = "RegistroX",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        },
+        actions = {
+            IconButton(onClick = onCarritoClick) {
+                BadgedBox(
+                    badge = {
+                        if (carritoCount > 0) {
+                            Badge {
+                                Text(carritoCount.toString())
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingCart,
+                        contentDescription = "Carrito",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        )
+    )
+}
+```
+
+**Usage:**
+```kotlin
+HomeTopBar(
+    carritoCount = viewModel.carrito.size,
+    onCarritoClick = { navController.navigate(Routes.ENTRADAS) }
+)
+```
+</Accordion>
+
+<Accordion title="TrabajadorTopBar">
+Worker-specific top bar with role indication:
+
+```kotlin TopBar.kt
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TrabajadorTopBar(
+    onExitClick: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Column {
+                Text(
+                    text = "Bienvenido",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Text(
+                    text = "Trabajador",
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        )
+    )
+}
+```
+</Accordion>
+
+## Bottom Navigation Bar
+
+The bottom bar adapts based on user role, showing different navigation items for regular users vs workers.
+
+```kotlin BottomBar.kt
+@Composable
+fun BottomBar(
+    navController: NavHostController,
+    items: List<BottomNavItem>,
+    userRole: Role? = null
+) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.primary
+    ) {
+        items.forEach { item ->
+            // Hide worker item for non-workers
+            if (item.route == Routes.TRABAJADOR && userRole != Role.TRABAJADOR) {
+                return@forEach
+            }
+            
+            NavigationBarItem(
+                icon = {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label
+                    )
+                },
+                label = {
+                    Text(item.label)
+                },
+                selected = currentRoute == item.route,
+                onClick = {
+                    if (currentRoute != item.route) {
+                        navController.navigate(item.route) {
+                            popUpTo(Routes.HOME) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                    unselectedIconColor = Color.White,
+                    selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                    unselectedTextColor = Color.White,
+                    indicatorColor = MaterialTheme.colorScheme.secondary
+                )
+            )
+        }
+    }
+}
+```
+
+### Navigation Items
+
+Bottom navigation items are defined as sealed classes:
+
+```kotlin BottomNavItem.kt
+sealed class BottomNavItem(
+    val route: String, 
+    val label: String, 
+    val icon: ImageVector
+) {
+    object Home : BottomNavItem(
+        Routes.HOME, 
+        "Explorar", 
+        Icons.Filled.Explore
+    )
+    
+    object QR : BottomNavItem(
+        Routes.ENTRADAS, 
+        "Entradas", 
+        Icons.Filled.ConfirmationNumber
+    )
+    
+    object Profile : BottomNavItem(
+        Routes.PROFILE, 
+        "Cuenta", 
+        Icons.Filled.Person
+    )
+    
+    object Scan : BottomNavItem(
+        Routes.TRABAJADOR, 
+        "Verificar", 
+        Icons.Filled.Verified
+    )
+}
+```
+
+## Card Components
+
+<Accordion title="EntradaCard">
+Displays ticket information with an "Add to Cart" button:
+
+```kotlin EntradaCard.kt
+@Composable
+fun EntradaCard(
+    entrada: Entrada,
+    onAgregar: (Entrada) -> Unit = {}
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            Text(
+                entrada.titulo, 
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                entrada.lugar, 
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                "Precio: ${entrada.precio} $", 
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { onAgregar(entrada) },
+                    enabled = entrada.estado.lowercase() == "disponible",
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Agregar", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+```
+
+**Usage:**
+```kotlin
+LazyColumn {
+    items(entradas) { entrada ->
+        EntradaCard(
+            entrada = entrada,
+            onAgregar = { viewModel.agregarAlCarrito(it) }
+        )
+    }
+}
+```
+</Accordion>
+
+## Network Status Components
+
+<Accordion title="InternetGuard">
+Wrapper component that monitors network connectivity:
+
+```kotlin InternetGuard.kt
+@Composable
+fun InternetGuard(
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    var isConnected by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(Unit) {
+        // Monitor network connectivity
+        isConnected = NetworkUtils.isNetworkAvailable(context)
+    }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        content()
+        
+        if (!isConnected) {
+            NoInternetOverlay()
+        }
+    }
+}
+```
+</Accordion>
+
+<Accordion title="NoInternetOverlay">
+Full-screen overlay displayed when offline:
+
+```kotlin NoInternetOverlay.kt
+@Composable
+fun NoInternetOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.8f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.WifiOff,
+                contentDescription = "Sin conexión",
+                tint = Color.White,
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Sin conexión a internet",
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+    }
+}
+```
+</Accordion>
+
+## Component Guidelines
+
+<Note>
+When creating new components, follow these principles:
+- Keep components **stateless** - pass state as parameters
+- Accept **callbacks** for user interactions
+- Use **Material 3** components as building blocks
+- Support **theming** through MaterialTheme
+- Provide **content descriptions** for accessibility
+</Note>
+
+## Composition Example
+
+Here's how components compose together in a screen:
+
+```kotlin
+Scaffold(
+    topBar = {
+        HomeTopBar(
+            carritoCount = viewModel.carrito.size,
+            onCarritoClick = { navController.navigate(Routes.ENTRADAS) }
+        )
+    },
+    bottomBar = {
+        BottomBar(
+            navController = navController,
+            items = bottomItems,
+            userRole = user?.role
+        )
+    }
+) { padding ->
+    LazyColumn(
+        modifier = Modifier.padding(padding)
+    ) {
+        items(entradas) { entrada ->
+            EntradaCard(
+                entrada = entrada,
+                onAgregar = { viewModel.agregarAlCarrito(it) }
+            )
+        }
+    }
+}
+```

@@ -1,0 +1,307 @@
+---
+title: Configuration
+description: Configure API endpoints, permissions, and environment settings for RegistroX
+---
+
+## Overview
+
+RegistroX requires proper configuration of API endpoints, Android permissions, and application settings before running. This guide covers all necessary configuration steps.
+
+## API Configuration
+
+### Backend Endpoint Setup
+
+The default API endpoint is configured in `RetrofitInstance.kt`. You can modify this to point to your backend:
+
+<Steps>
+  <Step title="Locate Retrofit Configuration">
+    Open the Retrofit configuration file:
+    
+    ```kotlin app/src/main/java/com/example/registrox_proyecto/data/remote/RetrofitInstance.kt
+    object RetrofitInstance {
+        private const val BASE_URL = "https://api-rest-registrox.onrender.com/"
+        
+        private val client = OkHttpClient.Builder()
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            })
+            .build()
+    }
+    ```
+  </Step>
+
+  <Step title="Update Base URL">
+    Modify the `BASE_URL` constant to point to your API:
+    
+    <CodeGroup>
+    ```kotlin Production
+    private const val BASE_URL = "https://your-api.example.com/"
+    ```
+    
+    ```kotlin Development
+    private const val BASE_URL = "http://192.168.1.100:8080/"
+    ```
+    
+    ```kotlin Localhost (Emulator)
+    // Use 10.0.2.2 to access host machine from Android emulator
+    private const val BASE_URL = "http://10.0.2.2:8080/"
+    ```
+    </CodeGroup>
+    
+    <Warning>
+      When using HTTP (not HTTPS) in development, you must configure network security settings.
+    </Warning>
+  </Step>
+
+  <Step title="Configure Network Security (Development)">
+    For local development with HTTP, create a network security configuration:
+    
+    Create `app/src/main/res/xml/network_security_config.xml`:
+    
+    ```xml network_security_config.xml
+    <?xml version="1.0" encoding="utf-8"?>
+    <network-security-config>
+        <domain-config cleartextTrafficPermitted="true">
+            <domain includeSubdomains="true">10.0.2.2</domain>
+            <domain includeSubdomains="true">192.168.1.100</domain>
+        </domain-config>
+    </network-security-config>
+    ```
+    
+    Then reference it in `AndroidManifest.xml`:
+    
+    ```xml AndroidManifest.xml
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        ...>
+    ```
+    
+    <Note>
+      Never use cleartext traffic in production. Always use HTTPS for production APIs.
+    </Note>
+  </Step>
+</Steps>
+
+### API Services
+
+RegistroX uses three main API services:
+
+```kotlin RetrofitInstance.kt
+// Entradas (Tickets) API
+val apiEntradas: EntradasApiService by lazy {
+    Retrofit.Builder()
+        .baseUrl(BASE_URL)
+        .addConverterFactory(GsonConverterFactory.create())
+        .client(client)
+        .build()
+        .create(EntradasApiService::class.java)
+}
+
+// Compras (Purchases) API
+val apiCompras: ComprasApiService by lazy {
+    Retrofit.Builder()
+        .baseUrl(BASE_URL)
+        .addConverterFactory(GsonConverterFactory.create())
+        .client(client)
+        .build()
+        .create(ComprasApiService::class.java)
+}
+
+// Usuario (User) API
+val api: UsuarioApiService by lazy {
+    Retrofit.Builder()
+        .baseUrl(BASE_URL)
+        .addConverterFactory(GsonConverterFactory.create())
+        .client(client)
+        .build()
+        .create(UsuarioApiService::class.java)
+}
+```
+
+## Permissions Configuration
+
+RegistroX requires several Android permissions defined in `AndroidManifest.xml`:
+
+### Required Permissions
+
+```xml AndroidManifest.xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Notifications for ticket updates -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Network access for API calls -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
+    <!-- Storage for ticket data -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- Camera for QR code scanning -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    
+    <!-- Camera hardware feature (optional) -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+        
+</manifest>
+```
+
+### Permission Details
+
+<Note>
+  Most permissions are granted automatically, but runtime permissions (Camera, Notifications, Storage) require user consent on Android 6.0+.
+</Note>
+
+| Permission | Purpose | Runtime |
+|------------|---------|----------|
+| `INTERNET` | API communication and data sync | No |
+| `ACCESS_NETWORK_STATE` | Check network availability | No |
+| `CAMERA` | QR code scanning for tickets | Yes |
+| `POST_NOTIFICATIONS` | Send ticket updates (Android 13+) | Yes |
+| `READ_EXTERNAL_STORAGE` | Access ticket images/files | Yes |
+
+## Application Configuration
+
+### App Identity
+
+The application is configured with the following identity:
+
+```kotlin build.gradle.kts (app)
+defaultConfig {
+    applicationId = "com.example.registrox_proyecto"
+    versionCode = 1
+    versionName = "1.0"
+}
+```
+
+### Build Configuration
+
+<CodeGroup>
+```kotlin Debug Build
+buildTypes {
+    debug {
+        // Debug build with logging enabled
+        isDebuggable = true
+        applicationIdSuffix = ".debug"
+    }
+}
+```
+
+```kotlin Release Build
+buildTypes {
+    release {
+        isMinifyEnabled = false
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro"
+        )
+    }
+}
+```
+</CodeGroup>
+
+## Gradle Properties
+
+Ensure your `gradle.properties` includes:
+
+```properties gradle.properties
+# AndroidX and Kotlin
+android.useAndroidX=true
+kotlin.code.style=official
+
+# Performance optimization
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.nonTransitiveRClass=true
+
+# Enable build cache
+org.gradle.caching=true
+```
+
+## Environment-Specific Configuration
+
+### Build Variants
+
+For different environments, you can use build variants:
+
+<CodeGroup>
+```kotlin Development
+android {
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            buildConfigField("String", "API_URL", "\"http://10.0.2.2:8080/\"")
+        }
+    }
+}
+```
+
+```kotlin Production
+android {
+    productFlavors {
+        create("prod") {
+            dimension = "environment"
+            buildConfigField("String", "API_URL", "\"https://api.example.com/\"")
+        }
+    }
+}
+```
+</CodeGroup>
+
+## DataStore Configuration
+
+RegistroX uses DataStore for local preferences. No additional configuration is required, but you can customize storage:
+
+```kotlin DataStore Setup
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "registrox_preferences"
+)
+```
+
+## Logging Configuration
+
+HTTP logging is configured via OkHttp interceptor:
+
+```kotlin RetrofitInstance.kt
+private val client = OkHttpClient.Builder()
+    .addInterceptor(HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY  // Change to NONE for production
+    })
+    .build()
+```
+
+<Warning>
+  Set logging level to `NONE` in production to avoid exposing sensitive data in logs.
+</Warning>
+
+## Verification
+
+Verify your configuration:
+
+<Steps>
+  <Step title="Check API Connection">
+    Run the app and check Logcat for successful API connections:
+    ```
+    D/OkHttp: --> GET https://your-api.example.com/endpoint
+    D/OkHttp: <-- 200 OK
+    ```
+  </Step>
+  
+  <Step title="Test Permissions">
+    Launch the app and verify all runtime permissions are requested properly.
+  </Step>
+  
+  <Step title="Verify Build">
+    Ensure the app builds without configuration errors:
+    ```bash
+    ./gradlew assembleDebug
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+With configuration complete, proceed to [Running the App](/getting-started/running) to build and launch RegistroX.

@@ -1,0 +1,341 @@
+---
+title: 'Authentication'
+description: 'User authentication workflows including login, registration, and OTP verification'
+---
+
+## Overview
+
+RegistroX implements a secure authentication system with email-based login, user registration with validation, and OTP (One-Time Password) verification for enhanced security.
+
+<Note>
+All authentication flows require internet connectivity and are protected by the `InternetGuard` component.
+</Note>
+
+## Authentication Workflows
+
+<Steps>
+  <Step title="User Registration">
+    New users create an account with email and password validation
+  </Step>
+  <Step title="Login">
+    Existing users authenticate with their credentials
+  </Step>
+  <Step title="OTP Verification">
+    Users verify their identity with a 4-digit code sent via notification
+  </Step>
+</Steps>
+
+## Login Screen
+
+The login screen provides a simple interface for users to authenticate with email and password.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Email Authentication" icon="envelope">
+    Users log in with their registered email address
+  </Card>
+  <Card title="Password Visibility Toggle" icon="eye">
+    Toggle password visibility for easier input
+  </Card>
+  <Card title="Loading States" icon="spinner">
+    Visual feedback during authentication process
+  </Card>
+  <Card title="Error Handling" icon="exclamation-triangle">
+    Clear error messages for invalid credentials
+  </Card>
+</CardGroup>
+
+### Implementation
+
+The login screen is implemented in `LoginScreen.kt` and uses the `LoginViewModel` for state management:
+
+```kotlin LoginScreen.kt:22
+@Composable
+fun LoginScreen(navController: NavController, viewModel: LoginViewModel) {
+    val user by viewModel.user.collectAsStateWithLifecycle()
+    val formState by viewModel.formState.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+
+    LaunchedEffect(user) {
+        if (user != null && viewModel.justLoggedIn) {
+            navController.navigate(Routes.OTP) {
+                popUpTo(Routes.LOGIN) { inclusive = true }
+            }
+            viewModel.justLoggedIn = false
+        }
+    }
+}
+```
+
+### Form Validation
+
+The login form validates email and password fields, displaying errors when validation fails:
+
+```kotlin LoginScreen.kt:56
+OutlinedTextField(
+    value = formState.email,
+    onValueChange = { viewModel.onEmailChange(it) },
+    label = { Text("Correo") },
+    modifier = Modifier.fillMaxWidth()
+)
+
+OutlinedTextField(
+    value = formState.password,
+    onValueChange = { viewModel.onPasswordChange(it) },
+    label = { Text("Contraseña") },
+    modifier = Modifier.fillMaxWidth(),
+    visualTransformation = 
+        if (passVisible) VisualTransformation.None 
+        else PasswordVisualTransformation()
+)
+```
+
+### Login ViewModel
+
+The `LoginViewModel` manages authentication state and communicates with the backend:
+
+```kotlin LoginViewModel.kt:60
+fun login() {
+    viewModelScope.launch {
+        _isLoading.value = true
+        delay(800)
+
+        try {
+            val email = _formState.value.email.trim()
+            val password = _formState.value.password
+
+            val usuarioAPI = authRepository.login(email, password)
+
+            if (usuarioAPI != null) {
+                val roleEnum = 
+                    if (usuarioAPI.rol.id?.toInt() == 1) Role.TRABAJADOR 
+                    else Role.USUARIO
+
+                justLoggedIn = true
+
+                _user.value = User(
+                    id = usuarioAPI.id ?: 0L,
+                    email = usuarioAPI.email,
+                    role = roleEnum
+                )
+
+                authDataStore.saveUser(usuarioAPI.email, roleEnum.name)
+            } else {
+                _formState.update { it.copy(loginError = "Credenciales incorrectas") }
+            }
+        } catch (e: Exception) {
+            _formState.update { it.copy(loginError = "Error: ${e.localizedMessage}") }
+        }
+
+        _isLoading.value = false
+    }
+}
+```
+
+## Registration Screen
+
+New users can create accounts with comprehensive validation for email and password fields.
+
+### Validation Rules
+
+<Accordion title="Email Validation">
+  - Must not be blank
+  - Must match email format: `username@domain.extension`
+  - Validated using regex pattern: `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$`
+</Accordion>
+
+<Accordion title="Password Validation">
+  - Minimum 6 characters
+  - Must contain at least one uppercase letter
+  - Must contain at least one number
+  - Validated using regex: `^(?=.*[A-Z])(?=.*\\d).{6,}$`
+</Accordion>
+
+<Accordion title="Confirm Password">
+  - Must match the password field
+  - Real-time validation as user types
+</Accordion>
+
+### Role Assignment
+
+Users are automatically assigned roles based on their email domain:
+
+```kotlin RegisterViewModel.kt:125
+val roleEnum = if (email.endsWith("@registrox.cl"))
+    Role.TRABAJADOR else Role.USUARIO
+```
+
+- Emails ending with `@registrox.cl` receive the `TRABAJADOR` (Worker) role
+- All other emails receive the `USUARIO` (User) role
+
+### Registration Form
+
+```kotlin RegisterScreen.kt:86
+OutlinedTextField(
+    value = formState.email,
+    onValueChange = { viewModel.onEmailChange(it) },
+    label = { Text("Correo") },
+    singleLine = true,
+    modifier = Modifier.fillMaxWidth(),
+    isError = formState.emailError != null
+)
+
+formState.emailError?.let { error ->
+    Text(
+        text = error,
+        color = MaterialTheme.colorScheme.error,
+        style = MaterialTheme.typography.bodySmall
+    )
+}
+```
+
+### Registration Process
+
+<Steps>
+  <Step title="Form Validation">
+    All fields are validated in real-time as the user types
+  </Step>
+  <Step title="Submit Registration">
+    User submits the form when all validations pass
+  </Step>
+  <Step title="API Call">
+    Registration request is sent to the backend
+  </Step>
+  <Step title="Success Feedback">
+    Snackbar displays success message
+  </Step>
+  <Step title="Navigation">
+    User is redirected to login screen
+  </Step>
+</Steps>
+
+## OTP Verification
+
+After successful login, users must verify their identity using a 4-digit OTP code sent via notification.
+
+### OTP Flow
+
+<CardGroup cols={2}>
+  <Card title="Generate OTP" icon="key">
+    System generates a random 4-digit code
+  </Card>
+  <Card title="Send Notification" icon="bell">
+    Code is delivered via Android notification
+  </Card>
+  <Card title="User Input" icon="keyboard">
+    User enters the 4-digit code
+  </Card>
+  <Card title="Verification" icon="check">
+    System validates the entered code
+  </Card>
+</CardGroup>
+
+### OTP Input Component
+
+The OTP screen features a custom input field that displays four separate boxes for each digit:
+
+```kotlin OtpScreen.kt:151
+@Composable
+fun OtpInputField(code: String, onCodeChange: (String) -> Unit) {
+    val focusRequester = remember { FocusRequester() }
+
+    TextField(
+        value = code,
+        onValueChange = { value ->
+            if (value.length <= 4 && value.all { it.isDigit() }) {
+                onCodeChange(value)
+            }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+    )
+
+    val chars = List(4) { i -> code.getOrNull(i)?.toString() ?: "" }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        chars.forEach { digit ->
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                modifier = Modifier.width(56.dp).height(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = digit, fontSize = 20.sp)
+                }
+            }
+        }
+    }
+}
+```
+
+### OTP Generation
+
+```kotlin OtpScreen.kt:219
+fun generateOtp(): String = (1000..9999).random().toString()
+```
+
+### Notification Handling
+
+The app requests notification permissions (Android 13+) and sends the OTP via notification:
+
+```kotlin OtpScreen.kt:221
+fun sendOtpNotification(context: Context, code: String) {
+    val channelId = "otp_channel"
+    val manager = NotificationManagerCompat.from(context)
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        manager.createNotificationChannel(
+            NotificationChannel(
+                channelId,
+                "OTP Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+        )
+    }
+
+    val notification = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+        .setContentTitle("OTP Code")
+        .setContentText("Tu codigo es: $code")
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .build()
+
+    manager.notify(1, notification)
+}
+```
+
+## Security Features
+
+<Card title="Session Management" icon="lock">
+  User sessions are persisted using DataStore, allowing automatic login on app restart
+</Card>
+
+<Card title="Logout" icon="arrow-right-from-bracket">
+  Users can log out from the profile screen, clearing all stored credentials
+</Card>
+
+<Note>
+The authentication system integrates with the backend API to validate credentials and manage user sessions securely.
+</Note>
+
+## Error Handling
+
+The authentication system provides clear error messages for various scenarios:
+
+- **Invalid Credentials**: "Credenciales incorrectas"
+- **Network Error**: "Error de red" or "Sin conexion a internet"
+- **Validation Errors**: Field-specific error messages
+- **OTP Mismatch**: "Código incorrecto"
+
+## Next Steps
+
+After successful authentication and OTP verification, users are directed to the home screen where they can browse and purchase tickets.
+
+<CardGroup cols={2}>
+  <Card title="Browse Tickets" icon="ticket" href="/features/tickets">
+    Explore available event tickets
+  </Card>
+  <Card title="Manage Profile" icon="user" href="/features/profile">
+    Update profile settings and preferences
+  </Card>
+</CardGroup>

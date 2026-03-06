@@ -1,0 +1,299 @@
+---
+title: 'Ticket Validation'
+description: 'Understanding the ticket validation process for marking tickets as used'
+---
+
+## Overview
+
+Ticket validation is the core process that allows workers to verify and mark tickets as used after scanning QR codes. The system validates tickets against the backend API and updates their status to prevent reuse.
+
+## Validation Architecture
+
+The validation process involves three main components:
+
+1. **UI Layer** - `ScannerScreen` or `HomeTrabajadorScreen`
+2. **ViewModel Layer** - `ScannerViewModel` or `CarritoViewModel`
+3. **Repository Layer** - `EntradasRepository` for API communication
+
+## Scanner Validation Flow
+
+### ScannerViewModel Implementation
+
+The `ScannerViewModel` handles validation for the dedicated scanner screen:
+
+```kotlin
+class ScannerViewModel(
+    private val entradasRepository: EntradasRepository = EntradasRepository()
+) : ViewModel() {
+
+    private val _mensajeOperacion = mutableStateOf("")
+    val mensajeOperacion: State<String> = _mensajeOperacion
+
+    fun validarEntrada(codigoQR: String, hasInternet: Boolean) {
+        viewModelScope.launch {
+            if (!hasInternet) {
+                _mensajeOperacion.value = "Sin conexión a internet"
+                return@launch
+            }
+
+            try {
+                val response = entradasRepository.marcarEntradaUsada(codigoQR)
+                if (response.isSuccessful) {
+                    _mensajeOperacion.value =
+                        response.body()?.get("mensaje") ?: "Entrada validada correctamente"
+                } else {
+                    _mensajeOperacion.value =
+                        response.errorBody()?.string() ?: "Error desconocido"
+                }
+            } catch (e: Exception) {
+                _mensajeOperacion.value = "Error de conexión"
+            }
+        }
+    }
+}
+```
+
+<Info>
+The validation process uses Kotlin Coroutines with `viewModelScope` to handle async operations without blocking the UI thread.
+</Info>
+
+## Worker Home Validation
+
+### HomeTrabajadorScreen Implementation
+
+The worker home screen provides an alternative interface for ticket validation with both scanning and manual input options:
+
+```kotlin
+@Composable
+fun HomeTrabajadorScreen(
+    onBackClick: () -> Unit = {},
+    carritoViewModel: CarritoViewModel = viewModel()
+) {
+    var codigoEscaneado by remember { mutableStateOf("") }
+    val mensajeOperacion = carritoViewModel.mensajeOperacion.value
+    val context = LocalContext.current
+
+    val qrLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        if (result.contents != null) {
+            codigoEscaneado = result.contents
+            if (NetworkUtils.isNetworkAvailable(context)) {
+                carritoViewModel.marcarEntradaUsadaRemota(codigoEscaneado)
+            } else {
+                carritoViewModel.mensajeOperacion.value = "Sin conexion a internet"
+            }
+        }
+    }
+}
+```
+
+### Remote Validation Method
+
+The `CarritoViewModel` provides the `marcarEntradaUsadaRemota` method for marking tickets as used:
+
+```kotlin
+fun marcarEntradaUsadaRemota(codigoQR: String) {
+    viewModelScope.launch {
+        if (!NetworkUtils.isNetworkAvailable(context())) {
+            mensajeOperacion.value = "Sin conexion a internet"
+            return@launch
+        }
+
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitInstance.apiEntradas.marcarEntradaUsada(codigoQR)
+            }
+            if (response.isSuccessful) {
+                val codigoLimpio = codigoQR.trim().uppercase()
+                val actualizados = ticketsUsuario.map {
+                    if (it.codigoQR?.uppercase() == codigoLimpio)
+                        it.copy(estado = "ocupada")
+                    else it
+                }
+                ticketsUsuario.clear()
+                ticketsUsuario.addAll(actualizados)
+                mensajeOperacion.value = response.body()?.get("mensaje") 
+                    ?: "Entrada validada correctamente"
+            } else {
+                mensajeOperacion.value = response.errorBody()?.string()
+                    ?: "Error al marcar la entrada como usada"
+            }
+        } catch (e: Exception) {
+            mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+        }
+    }
+}
+```
+
+<Warning>
+QR codes are normalized (trimmed and converted to uppercase) before comparison to ensure accurate matching regardless of case sensitivity.
+</Warning>
+
+## Validation Process Steps
+
+<Steps>
+  <Step title="Network Check">
+    Verify internet connectivity before attempting validation. Without internet, the validation cannot proceed.
+    
+    ```kotlin
+    if (!NetworkUtils.isNetworkAvailable(context())) {
+        mensajeOperacion.value = "Sin conexion a internet"
+        return@launch
+    }
+    ```
+  </Step>
+  
+  <Step title="API Request">
+    Send the QR code to the backend API using Retrofit on the IO dispatcher thread to mark the ticket as used.
+    
+    ```kotlin
+    val response = withContext(Dispatchers.IO) {
+        RetrofitInstance.apiEntradas.marcarEntradaUsada(codigoQR)
+    }
+    ```
+  </Step>
+  
+  <Step title="Response Handling">
+    Process the API response to determine if validation was successful or if an error occurred.
+  </Step>
+  
+  <Step title="Local State Update">
+    Update the local ticket list to reflect the new "ocupada" (used) status for successfully validated tickets.
+  </Step>
+  
+  <Step title="User Feedback">
+    Display a success or error message to inform the worker of the validation result.
+  </Step>
+</Steps>
+
+## Ticket States
+
+Tickets can have the following states during the validation lifecycle:
+
+| State | Description | Can be validated? |
+|-------|-------------|-------------------|
+| `disponible` | Ticket purchased but not yet used | ✅ Yes |
+| `ocupada` | Ticket has been validated and used | ❌ No |
+
+<Note>
+Once a ticket is marked as "ocupada" (used), it cannot be validated again, preventing duplicate entry.
+</Note>
+
+## Manual Validation
+
+Workers can manually enter ticket codes when QR scanning is not possible:
+
+```kotlin
+OutlinedTextField(
+    value = codigoEscaneado,
+    onValueChange = { codigoEscaneado = it },
+    label = { Text("Ingrese codigo QR o ID") },
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(16.dp)
+)
+
+Button(
+    onClick = {
+        if (codigoEscaneado.isNotEmpty()) {
+            if (NetworkUtils.isNetworkAvailable(context)) {
+                carritoViewModel.marcarEntradaUsadaRemota(codigoEscaneado)
+            } else {
+                carritoViewModel.mensajeOperacion.value = "Sin conexion a internet"
+            }
+        } else {
+            carritoViewModel.mensajeOperacion.value =
+                "Debe ingresar o escanear un codigo"
+        }
+    }
+) {
+    Text("Validar Manual")
+}
+```
+
+## Error Handling
+
+The validation system handles several types of errors:
+
+### Network Errors
+
+```kotlin
+catch (e: Exception) {
+    mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+}
+```
+
+<Warning>
+Network errors are caught and displayed to users with localized error messages to help diagnose connectivity issues.
+</Warning>
+
+### API Errors
+
+When the API returns an error response:
+
+```kotlin
+if (!response.isSuccessful) {
+    mensajeOperacion.value = response.errorBody()?.string()
+        ?: "Error al marcar la entrada como usada"
+}
+```
+
+Common API error scenarios:
+- Ticket already used
+- Invalid QR code format
+- Ticket not found in database
+- Expired ticket
+
+### Empty Code Validation
+
+```kotlin
+if (codigoEscaneado.isNotEmpty()) {
+    // Proceed with validation
+} else {
+    carritoViewModel.mensajeOperacion.value = "Debe ingresar o escanear un codigo"
+}
+```
+
+## Visual Feedback
+
+The system provides color-coded feedback to workers:
+
+```kotlin
+Text(
+    text = mensajeOperacion,
+    style = MaterialTheme.typography.titleMedium,
+    color = if (mensajeOperacion.contains("correctamente", true))
+        MaterialTheme.colorScheme.primary
+    else
+        MaterialTheme.colorScheme.error,
+    modifier = Modifier.padding(horizontal = 16.dp)
+)
+```
+
+- **Green/Primary color** - Successful validation
+- **Red/Error color** - Validation failed or error occurred
+
+## Best Practices
+
+<Card title="Internet Connectivity" icon="wifi">
+  Always ensure stable internet connection before starting a validation session. The app checks connectivity before each validation attempt.
+</Card>
+
+<Card title="QR Code Quality" icon="qrcode">
+  Ensure QR codes are clearly visible and not damaged. Use manual validation as a fallback if scanning fails.
+</Card>
+
+<Card title="User Feedback" icon="message">
+  Pay attention to validation messages. Success messages confirm the ticket is valid, while error messages indicate issues that need attention.
+</Card>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="QR Scanner" icon="camera" href="/features/qr-scanner">
+    Learn about the QR scanning interface
+  </Card>
+  
+  <Card title="Worker Dashboard" icon="house" href="/features/worker-dashboard">
+    Explore the worker home screen features
+  </Card>
+</CardGroup>

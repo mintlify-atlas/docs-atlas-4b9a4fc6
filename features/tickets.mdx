@@ -1,0 +1,422 @@
+---
+title: 'Ticket Management'
+description: 'Browse, view, and manage event tickets with QR codes'
+---
+
+## Overview
+
+RegistroX provides a comprehensive ticket management system that allows users to browse available event tickets, view detailed information, and manage their purchased tickets with QR codes for entry verification.
+
+<Note>
+All ticket operations require an active internet connection and authenticated user session.
+</Note>
+
+## Browsing Tickets
+
+The home screen displays all available event tickets with search functionality and real-time updates.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Search Tickets" icon="search">
+    Filter tickets by title with real-time search
+  </Card>
+  <Card title="Ticket Cards" icon="credit-card">
+    Visual cards displaying ticket information
+  </Card>
+  <Card title="Add to Cart" icon="cart-plus">
+    Quick add functionality for purchasing
+  </Card>
+  <Card title="API Synchronization" icon="sync">
+    Real-time data from backend API
+  </Card>
+</CardGroup>
+
+### Home Screen Implementation
+
+The home screen loads tickets from the API and displays them in a scrollable list:
+
+```kotlin HomeScreen.kt:24
+@Composable
+fun HomeScreen(
+    navController: NavController,
+    carritoViewModel: CarritoViewModel,
+    viewModel: EntradasApiViewModel = EntradasApiViewModel()
+) {
+    var searchText by remember { mutableStateOf("") }
+
+    val entradas by viewModel.entradas.collectAsStateWithLifecycle()
+    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        val hasInternet = NetworkUtils.isNetworkAvailable(context)
+        viewModel.cargarEntradas(hasInternet)
+    }
+}
+```
+
+### Search Functionality
+
+Users can search tickets by title with instant filtering:
+
+```kotlin HomeScreen.kt:50
+OutlinedTextField(
+    value = searchText,
+    onValueChange = { searchText = it },
+    placeholder = { Text("Buscar entradas...") },
+    modifier = Modifier.fillMaxWidth().padding(16.dp),
+    singleLine = true
+)
+
+val entradasFiltradas = remember(entradas, searchText) {
+    if (searchText.isBlank()) entradas
+    else entradas.filter {
+        it.titulo.contains(searchText, ignoreCase = true)
+    }
+}
+```
+
+### Ticket Data Model
+
+Each ticket contains essential event information:
+
+```kotlin Entrada.kt:3
+data class Entrada(
+    val id: Long? = null,
+    val titulo: String,
+    val lugar: String,
+    val precio: Double,
+    val estado: String,
+    val codigoQR: String? = null,
+    val cantidad: Int = 1,
+    val usuarioEmail: String? = null
+)
+```
+
+## Loading Tickets
+
+The `EntradasApiViewModel` manages ticket data retrieval and state:
+
+```kotlin EntradasApiViewModel.kt:21
+fun cargarEntradas(hasInternet: Boolean) {
+    viewModelScope.launch {
+        if (!hasInternet) {
+            _mensaje.value = "Sin conexion a internet"
+            return@launch
+        }
+
+        try {
+            val response = repository.obtenerEntradas()
+            if (response.isSuccessful) {
+                _entradas.value = response.body() ?: emptyList()
+            } else {
+                _mensaje.value = "Error: ${response.code()}"
+            }
+        } catch (e: Exception) {
+            _mensaje.value = "Error de red"
+        }
+    }
+}
+```
+
+### Loading States
+
+<Steps>
+  <Step title="Initial State">
+    Display loading spinner while fetching data
+  </Step>
+  <Step title="Success State">
+    Show ticket list when data loads successfully
+  </Step>
+  <Step title="Error State">
+    Display error message if API call fails
+  </Step>
+  <Step title="Empty State">
+    Show "no results" message when search returns nothing
+  </Step>
+</Steps>
+
+## Ticket Display
+
+Tickets are displayed using the `EntradaCard` component with all relevant information:
+
+```kotlin HomeScreen.kt:91
+LazyColumn(modifier = Modifier.weight(1f)) {
+    items(entradasFiltradas) { entrada ->
+        EntradaCard(
+            entrada = entrada,
+            onAgregar = { carritoViewModel.agregar(it) }
+        )
+    }
+}
+```
+
+## Purchased Tickets
+
+Users can view their purchased tickets with QR codes for event entry.
+
+### Purchase History
+
+The purchases screen displays all completed transactions:
+
+```kotlin ComprasScreen.kt:18
+@Composable
+fun ComprasScreen(
+    navController: NavController,
+    viewModel: ComprasViewModel
+) {
+    val compras by viewModel.compras.collectAsStateWithLifecycle()
+    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.cargarCompras()
+    }
+}
+```
+
+### Purchase Card Display
+
+Each purchase shows comprehensive details including all tickets:
+
+```kotlin ComprasScreen.kt:42
+Card(
+    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+) {
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text(
+            text = "Compra #${compra.id ?: "-"}",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(text = "Fecha: ${compra.fechaCompra ?: "No especificada"}")
+        Text(text = "Usuario: ${compra.usuario.email}")
+        
+        val entradas = compra.compraEntradas ?: emptyList()
+        Text(text = "Entradas (${entradas.size}):")
+
+        entradas.forEach { ce ->
+            val entrada = ce.entrada
+            if (entrada != null) {
+                Text(text = "- ${entrada.titulo} (${entrada.lugar})")
+                Text(
+                    text = "   QR: ${ce.codigoQR ?: "Sin QR"} | Estado: ${ce.estado}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+```
+
+## QR Code System
+
+Each purchased ticket generates a unique QR code for event entry validation.
+
+### QR Code Generation
+
+QR codes are uniquely generated for each ticket purchase:
+
+```kotlin CarritoViewModel.kt:43
+private fun generarCodigoQRUnico(entradaId: Long?, email: String): String {
+    val timestamp = System.currentTimeMillis()
+    return "QR-${email.hashCode()}-${entradaId ?: 0}-$timestamp"
+}
+```
+
+<Accordion title="QR Code Format">
+  The QR code format ensures uniqueness by combining:
+  - **Email Hash**: Hashed user email for privacy
+  - **Ticket ID**: Unique ticket identifier
+  - **Timestamp**: Purchase time in milliseconds
+  
+  Example: `QR-123456789-42-1678901234567`
+</Accordion>
+
+### Viewing QR Codes
+
+Users can tap on their tickets to view full-size QR codes:
+
+```kotlin DetalleEntradaScreen.kt:21
+@Composable
+fun DetalleEntradaScreen(
+    navController: NavController,
+    codigoQR: String
+) {
+    val qrBitmap = remember(codigoQR) {
+        QRCodeGenerator.generateQRCode(codigoQR, 700)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Tu entrada") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Filled.ArrowBack, "Volver")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            qrBitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "QR ampliado",
+                    modifier = Modifier.size(300.dp).padding(8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text("Codigo: $codigoQR", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+```
+
+## Ticket States
+
+Tickets can have different states throughout their lifecycle:
+
+<CardGroup cols={2}>
+  <Card title="Disponible" icon="check-circle">
+    Ticket is available for purchase or use
+  </Card>
+  <Card title="Ocupada" icon="ban">
+    Ticket has been scanned and used for entry
+  </Card>
+</CardGroup>
+
+### Marking Tickets as Used
+
+Workers can scan QR codes to mark tickets as used:
+
+```kotlin CarritoViewModel.kt:159
+fun marcarEntradaUsadaRemota(codigoQR: String) {
+    viewModelScope.launch {
+        if (!NetworkUtils.isNetworkAvailable(context())) {
+            mensajeOperacion.value = "Sin conexion a internet"
+            return@launch
+        }
+
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitInstance.apiEntradas.marcarEntradaUsada(codigoQR)
+            }
+            if (response.isSuccessful) {
+                val codigoLimpio = codigoQR.trim().uppercase()
+                val actualizados = ticketsUsuario.map {
+                    if (it.codigoQR?.uppercase() == codigoLimpio)
+                        it.copy(estado = "ocupada")
+                    else it
+                }
+                ticketsUsuario.clear()
+                ticketsUsuario.addAll(actualizados)
+                mensajeOperacion.value = "Entrada validada correctamente"
+            }
+        } catch (e: Exception) {
+            mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+        }
+    }
+}
+```
+
+## Ticket Management Operations
+
+### Synchronize Tickets
+
+Users can refresh their ticket list from the API:
+
+```kotlin CarritoViewModel.kt:106
+private suspend fun sincronizarEntradasDesdeApi(email: String) {
+    if (!NetworkUtils.isNetworkAvailable(context())) {
+        mensajeOperacion.value = "Sin conexión a internet"
+        return
+    }
+    try {
+        val repo = ComprasRepository()
+        val response = withContext(Dispatchers.IO) { repo.obtenerCompras() }
+
+        if (response.isSuccessful) {
+            val todas = response.body() ?: emptyList()
+            val comprasUsuario = todas.filter { it.usuario.email.equals(email, true) }
+            val ticketsUsuarioActual = comprasUsuario.flatMap { 
+                it.compraEntradas ?: emptyList() 
+            }
+
+            dataStore.saveEntradas(email, ticketsUsuarioActual.mapNotNull { it.entrada })
+            ticketsUsuario.clear()
+            ticketsUsuario.addAll(ticketsUsuarioActual)
+            mensajeOperacion.value = "Entradas sincronizadas correctamente"
+        }
+    } catch (e: Exception) {
+        mensajeOperacion.value = "Error de red: ${e.localizedMessage}"
+    }
+}
+```
+
+### Remove Used Tickets
+
+Filter out used tickets from the local display:
+
+```kotlin CarritoViewModel.kt:190
+fun eliminarOcupadas() {
+    viewModelScope.launch {
+        val disponibles = ticketsUsuario.filter { it.estado.lowercase() != "ocupada" }
+        ticketsUsuario.clear()
+        ticketsUsuario.addAll(disponibles)
+        mensajeOperacion.value = "Entradas ocupadas eliminadas"
+    }
+}
+```
+
+## User Experience
+
+<Steps>
+  <Step title="Browse Available Tickets">
+    Users view all event tickets with search functionality
+  </Step>
+  <Step title="Add to Shopping Cart">
+    Select tickets and add them to the cart
+  </Step>
+  <Step title="Complete Purchase">
+    Checkout process generates unique QR codes
+  </Step>
+  <Step title="View Purchased Tickets">
+    Access tickets with QR codes in purchases screen
+  </Step>
+  <Step title="Present at Event">
+    Show QR code for scanning at venue entrance
+  </Step>
+</Steps>
+
+## Error Handling
+
+The ticket system handles various error scenarios:
+
+- **No Internet Connection**: "Sin conexion a internet"
+- **API Errors**: "Error: [HTTP status code]"
+- **Network Errors**: "Error de red"
+- **Empty Results**: "No hay entradas disponibles"
+
+<Note>
+All ticket data is synchronized with the backend API to ensure consistency across devices and sessions.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Shopping Cart" icon="shopping-cart" href="/features/shopping-cart">
+    Learn about the checkout process
+  </Card>
+  <Card title="Profile Management" icon="user" href="/features/profile">
+    Manage your account settings
+  </Card>
+</CardGroup>

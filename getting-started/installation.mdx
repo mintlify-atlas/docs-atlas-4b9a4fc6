@@ -1,0 +1,185 @@
+---
+title: Installation
+description: Set up your development environment and install RegistroX for Android development
+---
+
+## Prerequisites
+
+Before installing RegistroX, ensure your development environment meets the following requirements:
+
+<Note>
+  RegistroX requires Android Studio Hedgehog (2023.1.1) or later for optimal Jetpack Compose support.
+</Note>
+
+### System Requirements
+
+- **Operating System**: Windows 10/11, macOS 10.14+, or Linux (Ubuntu 18.04+)
+- **RAM**: Minimum 8GB (16GB recommended)
+- **Disk Space**: At least 10GB free space
+- **JDK**: Java 11 (OpenJDK 11 or Oracle JDK 11)
+
+### Android Development Requirements
+
+- **Android Studio**: Hedgehog (2023.1.1) or later
+- **Android SDK**: API Level 24 (Android 7.0) minimum
+- **Target SDK**: API Level 36
+- **Gradle**: Version 8.0+ (included with Android Studio)
+- **Kotlin**: Version 1.9.0+ (included with Android Studio)
+
+## Installation Steps
+
+<Steps>
+  <Step title="Install Android Studio">
+    Download and install Android Studio from the [official website](https://developer.android.com/studio).
+    
+    During installation, ensure you select:
+    - Android SDK
+    - Android SDK Platform
+    - Android Virtual Device (AVD)
+    
+    <Warning>
+      Make sure to install the Android SDK Build-Tools and Platform-Tools through the SDK Manager.
+    </Warning>
+  </Step>
+
+  <Step title="Configure JDK">
+    RegistroX requires Java 11 for compilation. Configure your JDK in Android Studio:
+    
+    1. Open **File > Project Structure > SDK Location**
+    2. Set the JDK location to Java 11
+    3. Verify the Gradle JDK is set to version 11
+    
+    <CodeGroup>
+    ```bash macOS/Linux
+    # Verify Java version
+    java -version
+    # Should output: openjdk version "11.0.x"
+    ```
+    
+    ```powershell Windows
+    # Verify Java version
+    java -version
+    # Should output: openjdk version "11.0.x"
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Clone the Repository">
+    Clone the RegistroX repository to your local machine:
+    
+    <CodeGroup>
+    ```bash SSH
+    git clone git@github.com:yourusername/registroX-Proyecto.git
+    cd registroX-Proyecto
+    ```
+    
+    ```bash HTTPS
+    git clone https://github.com/yourusername/registroX-Proyecto.git
+    cd registroX-Proyecto
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install Dependencies">
+    Open the project in Android Studio and let Gradle sync automatically. The project uses the following key dependencies:
+    
+    <CodeGroup>
+    ```kotlin Core Dependencies
+    // Jetpack Compose
+    implementation("androidx.activity:activity-compose")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    
+    // Lifecycle & ViewModel
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    ```
+    
+    ```kotlin Networking
+    // Retrofit for API calls
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
+    ```
+    
+    ```kotlin QR & Storage
+    // QR Code scanning
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.google.zxing:core:3.5.3")
+    
+    // DataStore for preferences
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    
+    // Image loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    ```
+    
+    ```kotlin Navigation
+    // Navigation Component
+    implementation("androidx.navigation:navigation-compose:2.7.5")
+    implementation("androidx.navigation:navigation-runtime-ktx")
+    ```
+    </CodeGroup>
+    
+    <Note>
+      Gradle will automatically download all dependencies. This may take several minutes on first sync.
+    </Note>
+  </Step>
+
+  <Step title="Verify Installation">
+    Verify your installation by building the project:
+    
+    <CodeGroup>
+    ```bash Terminal
+    # From project root
+    ./gradlew build
+    ```
+    
+    ```bash Windows
+    # From project root
+    gradlew.bat build
+    ```
+    </CodeGroup>
+    
+    Or use Android Studio:
+    1. Select **Build > Make Project** (Ctrl+F9 / Cmd+F9)
+    2. Wait for the build to complete successfully
+    
+    <Warning>
+      If you encounter build errors, ensure your Gradle JVM is set to Java 11 in **Settings > Build > Gradle**.
+    </Warning>
+  </Step>
+</Steps>
+
+## SDK Configuration
+
+RegistroX is configured with the following SDK versions:
+
+```kotlin build.gradle.kts (app)
+android {
+    namespace = "com.example.registrox_proyecto"
+    compileSdk = 36
+    
+    defaultConfig {
+        applicationId = "com.example.registrox_proyecto"
+        minSdk = 24  // Android 7.0+
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+    }
+    
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+    
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}
+```
+
+## Next Steps
+
+Once installation is complete, proceed to [Configuration](/getting-started/configuration) to set up your API endpoints and permissions.

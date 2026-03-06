@@ -1,0 +1,332 @@
+---
+title: "Data Layer"
+description: "Repositories, API services, data models, and DataStore implementation"
+---
+
+## Architecture Overview
+
+The data layer implements the repository pattern, separating data sources from business logic. It consists of three main components:
+
+1. **Data Models**: Kotlin data classes representing entities
+2. **Remote Data Sources**: Retrofit API services
+3. **Local Data Sources**: DataStore for preferences
+4. **Repositories**: Abstraction layer coordinating data access
+
+## Data Models
+
+Data models are defined in the `data.model` package using Kotlin data classes.
+
+<Accordion title="Core Data Models">
+<CodeGroup>
+```kotlin Entrada.kt
+data class Entrada(
+    val id: Long? = null,
+    val titulo: String,
+    val lugar: String,
+    val precio: Double,
+    val estado: String,
+    val codigoQR: String? = null,
+    val cantidad: Int = 1,
+    val usuarioEmail: String? = null
+)
+```
+
+```kotlin Usuario.kt
+data class Usuario(
+    val id: Long? = null,
+    val email: String,
+    val password: String,
+    val rol: Rol
+)
+
+data class Rol(
+    val id: Int,
+    val nombre: String
+)
+```
+
+```kotlin Compra.kt
+data class Compra(
+    val id: Long? = null,
+    val fechaCompra: String,
+    val total: Double,
+    val usuario: Usuario,
+    val compraEntradas: List<CompraEntrada>
+)
+```
+</CodeGroup>
+</Accordion>
+
+<Accordion title="UI State Models">
+```kotlin LoginFormState.kt
+data class LoginFormState(
+    val email: String = "",
+    val password: String = "",
+    val emailError: String? = null,
+    val passwordError: String? = null,
+    val isLoading: Boolean = false
+)
+```
+
+```kotlin RegisterFormState.kt
+data class RegisterFormState(
+    val email: String = "",
+    val password: String = "",
+    val confirmPassword: String = "",
+    val emailError: String? = null,
+    val passwordError: String? = null,
+    val confirmPasswordError: String? = null,
+    val isLoading: Boolean = false
+)
+```
+</Accordion>
+
+## API Services
+
+API services are defined using Retrofit interfaces in the `data.remote` package.
+
+<CodeGroup>
+```kotlin EntradasApiService.kt
+interface EntradasApiService {
+    @GET("api/v1/entradas")
+    suspend fun getEntradas(): Response<List<Entrada>>
+    
+    @PATCH("api/v1/entradas/usar/{codigoQR}")
+    suspend fun marcarEntradaUsada(
+        @Path("codigoQR") codigoQR: String
+    ): Response<Map<String, String>>
+}
+```
+
+```kotlin UsuarioApiService.kt
+interface UsuarioApiService {
+    @GET("/api/v1/usuarios")
+    suspend fun getUsuarios(): Response<List<Usuario>>
+    
+    @POST("/api/v1/usuarios")
+    suspend fun createUsuario(
+        @Body usuario: Usuario
+    ): Response<Usuario>
+    
+    @GET("api/v1/imagenes")
+    suspend fun getImagenes(): Response<List<ImagenPerfil>>
+    
+    @Multipart
+    @POST("api/v1/imagenes/upload")
+    suspend fun subirImagenMultipart(
+        @Part file: MultipartBody.Part,
+        @Query("usuarioId") usuarioId: Long
+    ): Response<ImagenPerfil>
+}
+```
+
+```kotlin ComprasApiService.kt
+interface ComprasApiService {
+    @GET("api/v1/compras/usuario/{email}")
+    suspend fun getComprasPorUsuario(
+        @Path("email") email: String
+    ): Response<List<Compra>>
+    
+    @POST("api/v1/compras")
+    suspend fun crearCompra(
+        @Body compra: Compra
+    ): Response<Compra>
+}
+```
+</CodeGroup>
+
+### Retrofit Configuration
+
+All API services are configured through a singleton `RetrofitInstance`:
+
+```kotlin RetrofitInstance.kt
+object RetrofitInstance {
+    private const val BASE_URL = "https://api-rest-registrox.onrender.com/"
+    
+    private val client = OkHttpClient.Builder()
+        .addInterceptor(HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        })
+        .build()
+    
+    val apiEntradas: EntradasApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+            .create(EntradasApiService::class.java)
+    }
+    
+    val api: UsuarioApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+            .create(UsuarioApiService::class.java)
+    }
+}
+```
+
+## Repositories
+
+Repositories abstract data access and provide a clean API for ViewModels.
+
+<Accordion title="AuthRepository">
+```kotlin AuthRepository.kt
+class AuthRepository {
+    suspend fun register(email: String, password: String): Boolean {
+        return try {
+            val rol = if (email.endsWith("@registrox.cl"))
+                Rol(id = 1, nombre = "TRABAJADOR")
+            else
+                Rol(id = 2, nombre = "USUARIO")
+            
+            val nuevoUsuario = Usuario(
+                email = email,
+                password = password,
+                rol = rol
+            )
+            
+            val response = withContext(Dispatchers.IO) {
+                RetrofitInstance.api.createUsuario(nuevoUsuario)
+            }
+            
+            response.isSuccessful
+        } catch (e: Exception) {
+            Log.e("API_REGISTER", "Error: ${e.localizedMessage}")
+            false
+        }
+    }
+    
+    suspend fun login(email: String, password: String): Usuario? {
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitInstance.api.getUsuarios()
+            }
+            
+            if (response.isSuccessful) {
+                val usuarios = response.body() ?: emptyList()
+                usuarios.find { 
+                    it.email.equals(email, ignoreCase = true) 
+                }
+            } else null
+        } catch (e: Exception) {
+            Log.e("API_LOGIN", "Error: ${e.localizedMessage}")
+            null
+        }
+    }
+}
+```
+</Accordion>
+
+<Accordion title="EntradasRepository">
+```kotlin EntradasRepository.kt
+class EntradasRepository {
+    private val api = RetrofitInstance.apiEntradas
+    
+    suspend fun obtenerEntradas() = api.getEntradas()
+    
+    suspend fun marcarEntradaUsada(codigoQR: String): Response<Map<String, String>> {
+        return RetrofitInstance.apiEntradas.marcarEntradaUsada(codigoQR)
+    }
+}
+```
+</Accordion>
+
+## DataStore
+
+DataStore provides type-safe local data persistence for user preferences.
+
+<CodeGroup>
+```kotlin AuthDataStore.kt
+val Context.authDataStore by preferencesDataStore("auth_prefs")
+
+class AuthDataStore(private val context: Context) {
+    companion object {
+        private val EMAIL_KEY = stringPreferencesKey("email")
+        private val ROLE_KEY = stringPreferencesKey("role")
+    }
+    
+    val email: Flow<String?> = context.authDataStore.data.map { prefs ->
+        prefs[EMAIL_KEY] ?: ""
+    }
+    
+    val role: Flow<String?> = context.authDataStore.data.map { prefs ->
+        prefs[ROLE_KEY] ?: ""
+    }
+    
+    suspend fun saveUser(email: String, role: String) {
+        context.authDataStore.edit { prefs ->
+            prefs[EMAIL_KEY] = email
+            prefs[ROLE_KEY] = role
+        }
+    }
+}
+```
+
+```kotlin EntradasDataStore.kt
+val Context.entradasDataStore by preferencesDataStore("entradas_prefs")
+
+class EntradasDataStore(private val context: Context) {
+    companion object {
+        private val CARRITO_KEY = stringPreferencesKey("carrito_json")
+    }
+    
+    val carrito: Flow<List<Entrada>> = 
+        context.entradasDataStore.data.map { prefs ->
+            val json = prefs[CARRITO_KEY] ?: "[]"
+            Gson().fromJson(json, Array<Entrada>::class.java).toList()
+        }
+    
+    suspend fun guardarCarrito(entradas: List<Entrada>) {
+        context.entradasDataStore.edit { prefs ->
+            val json = Gson().toJson(entradas)
+            prefs[CARRITO_KEY] = json
+        }
+    }
+}
+```
+</CodeGroup>
+
+<Note>
+All network operations use Kotlin coroutines with `suspend` functions. The repository layer handles error logging and provides simple Boolean or nullable return types to ViewModels.
+</Note>
+
+## Error Handling
+
+The data layer implements consistent error handling:
+
+```kotlin
+suspend fun fetchData(): Result<Data> = try {
+    val response = api.getData()
+    if (response.isSuccessful) {
+        Result.success(response.body()!!)
+    } else {
+        Log.e("API_ERROR", "HTTP ${response.code()}")
+        Result.failure(Exception("HTTP ${response.code()}"))
+    }
+} catch (e: Exception) {
+    Log.e("API_ERROR", "Network error: ${e.localizedMessage}")
+    Result.failure(e)
+}
+```
+
+## Testing Data Layer
+
+Repository tests should mock API services:
+
+```kotlin
+@Test
+fun `login returns user when credentials are valid`() = runTest {
+    val mockApi = mockk<UsuarioApiService>()
+    coEvery { mockApi.getUsuarios() } returns Response.success(listOf(testUser))
+    
+    val repository = AuthRepository(mockApi)
+    val result = repository.login("test@example.com", "password")
+    
+    assertNotNull(result)
+    assertEquals("test@example.com", result?.email)
+}
+```

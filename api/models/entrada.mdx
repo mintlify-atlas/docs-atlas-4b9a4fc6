@@ -1,0 +1,118 @@
+---
+title: 'Entrada Model'
+description: 'Entrada (ticket) data model representing event tickets in the system'
+---
+
+## Entrada
+
+The `Entrada` model represents an event ticket in the RegistroX application. It contains all the information about a ticket including event details, pricing, and QR code for validation.
+
+```kotlin
+data class Entrada(
+    val id: Long? = null,
+    val titulo: String,
+    val lugar: String,
+    val precio: Double,
+    val estado: String,
+    val codigoQR: String? = null,
+    val cantidad: Int = 1,
+    val usuarioEmail: String? = null
+)
+```
+
+### Fields
+
+<ResponseField name="id" type="Long">
+  Unique identifier for the ticket entry (nullable for new entries)
+</ResponseField>
+
+<ResponseField name="titulo" type="String" required>
+  Title or name of the event
+</ResponseField>
+
+<ResponseField name="lugar" type="String" required>
+  Location or venue where the event takes place
+</ResponseField>
+
+<ResponseField name="precio" type="Double" required>
+  Price of the ticket in the system's currency
+</ResponseField>
+
+<ResponseField name="estado" type="String" required>
+  Current status of the ticket (e.g., "disponible", "vendido", "usado", "cancelado")
+</ResponseField>
+
+<ResponseField name="codigoQR" type="String">
+  QR code string used for ticket validation at entry points (nullable until generated)
+</ResponseField>
+
+<ResponseField name="cantidad" type="Int" default="1">
+  Quantity or number of tickets (defaults to 1)
+</ResponseField>
+
+<ResponseField name="usuarioEmail" type="String">
+  Email of the user who owns this ticket (nullable if not yet purchased)
+</ResponseField>
+
+## Ticket States
+
+The `estado` field can have the following values:
+
+| Estado | Description |
+|--------|-------------|
+| `disponible` | Ticket is available for purchase |
+| `vendido` | Ticket has been sold but not yet used |
+| `usado` | Ticket has been scanned and used for entry |
+| `cancelado` | Ticket has been cancelled or refunded |
+
+## Usage Examples
+
+### Creating a New Ticket
+
+```kotlin
+val entrada = Entrada(
+    id = null,
+    titulo = "Concierto Rock 2026",
+    lugar = "Estadio Nacional",
+    precio = 50.0,
+    estado = "disponible",
+    codigoQR = null,
+    cantidad = 1,
+    usuarioEmail = null
+)
+```
+
+### Purchased Ticket with QR Code
+
+```kotlin
+val entradaComprada = Entrada(
+    id = 123L,
+    titulo = "Concierto Rock 2026",
+    lugar = "Estadio Nacional",
+    precio = 50.0,
+    estado = "vendido",
+    codigoQR = "QR123456789ABC",
+    cantidad = 2,
+    usuarioEmail = "user@example.com"
+)
+```
+
+### Used Ticket
+
+```kotlin
+val entradaUsada = Entrada(
+    id = 123L,
+    titulo = "Concierto Rock 2026",
+    lugar = "Estadio Nacional",
+    precio = 50.0,
+    estado = "usado",
+    codigoQR = "QR123456789ABC",
+    cantidad = 2,
+    usuarioEmail = "user@example.com"
+)
+```
+
+## Related Models
+
+- [Compra](/api/models/compra) - Purchase model that contains multiple ticket entries
+- [CompraEntrada](/api/models/compra#compraentrada) - Join model linking purchases to specific ticket instances

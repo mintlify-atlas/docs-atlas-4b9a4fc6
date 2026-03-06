@@ -1,0 +1,227 @@
+---
+title: 'Entradas API'
+description: 'API endpoints for managing event tickets (entradas) in RegistroX'
+---
+
+## Get All Entradas
+
+Retrieves a list of all available event tickets in the system.
+
+```kotlin
+@GET("api/v1/entradas")
+suspend fun getEntradas(): Response<List<Entrada>>
+```
+
+### HTTP Request
+
+`GET /api/v1/entradas`
+
+### Response
+
+<ResponseField name="entradas" type="Array<Entrada>">
+  List of all event tickets available
+  
+  <Expandable title="Entrada properties">
+    <ResponseField name="id" type="Long">
+      Unique identifier for the ticket
+    </ResponseField>
+    
+    <ResponseField name="titulo" type="String" required>
+      Title or name of the event
+    </ResponseField>
+    
+    <ResponseField name="lugar" type="String" required>
+      Location where the event takes place
+    </ResponseField>
+    
+    <ResponseField name="precio" type="Double" required>
+      Price of the ticket
+    </ResponseField>
+    
+    <ResponseField name="estado" type="String" required>
+      Current status of the ticket (e.g., "disponible", "usado", "vencido")
+    </ResponseField>
+    
+    <ResponseField name="codigoQR" type="String">
+      QR code identifier for the ticket
+    </ResponseField>
+    
+    <ResponseField name="cantidad" type="Int" default="1">
+      Number of tickets available
+    </ResponseField>
+    
+    <ResponseField name="usuarioEmail" type="String">
+      Email of the user who owns the ticket
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "titulo": "Concierto Rock en Vivo",
+    "lugar": "Estadio Nacional",
+    "precio": 50000.0,
+    "estado": "disponible",
+    "codigoQR": "QR123456789",
+    "cantidad": 2,
+    "usuarioEmail": "usuario@example.com"
+  },
+  {
+    "id": 2,
+    "titulo": "Festival de Jazz",
+    "lugar": "Teatro Municipal",
+    "precio": 35000.0,
+    "estado": "disponible",
+    "codigoQR": "QR987654321",
+    "cantidad": 1,
+    "usuarioEmail": "otro@example.com"
+  }
+]
+```
+
+---
+
+## Mark Entrada as Used
+
+Marks a ticket as used by scanning its QR code. This endpoint updates the ticket status to indicate it has been redeemed.
+
+```kotlin
+@PATCH("api/v1/entradas/usar/{codigoQR}")
+suspend fun marcarEntradaUsada(@Path("codigoQR") codigoQR: String): Response<Map<String, String>>
+```
+
+### HTTP Request
+
+`PATCH /api/v1/entradas/usar/{codigoQR}`
+
+### Path Parameters
+
+<ParamField path="codigoQR" type="String" required>
+  The QR code identifier of the ticket to mark as used
+</ParamField>
+
+### Example Request
+
+```kotlin
+// Android/Kotlin example
+val codigoQR = "QR123456789"
+val response = entradasApiService.marcarEntradaUsada(codigoQR)
+```
+
+### Response
+
+<ResponseField name="response" type="Map<String, String>">
+  A map containing the operation result message
+  
+  <Expandable title="Response fields">
+    <ResponseField name="message" type="String">
+      Confirmation message indicating the ticket was successfully marked as used
+    </ResponseField>
+    
+    <ResponseField name="estado" type="String">
+      New status of the ticket (typically "usado")
+    </ResponseField>
+    
+    <ResponseField name="codigoQR" type="String">
+      The QR code that was processed
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "message": "Entrada marcada como usada exitosamente",
+  "estado": "usado",
+  "codigoQR": "QR123456789"
+}
+```
+
+### Error Responses
+
+<ResponseField name="error" type="Map<String, String>">
+  Error information when the operation fails
+  
+  <Expandable title="Common errors">
+    <ResponseField name="message" type="String">
+      Error description
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+**404 Not Found** - QR code not found:
+```json
+{
+  "message": "Entrada no encontrada con el código QR proporcionado"
+}
+```
+
+**400 Bad Request** - Ticket already used:
+```json
+{
+  "message": "Esta entrada ya ha sido utilizada"
+}
+```
+
+**400 Bad Request** - Ticket expired:
+```json
+{
+  "message": "Esta entrada ha expirado"
+}
+```
+
+---
+
+## Use Cases
+
+### Scanning QR Code at Event Entrance
+
+When a user arrives at an event venue, staff can scan the QR code on their ticket:
+
+1. Scan the QR code using the mobile app
+2. Call `marcarEntradaUsada()` with the scanned code
+3. System validates the ticket and marks it as used
+4. Display confirmation to staff and user
+
+```kotlin
+// Example implementation
+viewModelScope.launch {
+    try {
+        val result = entradasApiService.marcarEntradaUsada(scannedQRCode)
+        if (result.isSuccessful) {
+            // Show success message
+            showMessage("Entrada válida - Acceso permitido")
+        } else {
+            // Handle error (already used, expired, etc.)
+            showError("Entrada inválida")
+        }
+    } catch (e: Exception) {
+        showError("Error al validar entrada: ${e.message}")
+    }
+}
+```
+
+### Viewing Available Tickets
+
+Users can view all their available tickets and event information:
+
+```kotlin
+// Example implementation
+viewModelScope.launch {
+    try {
+        val result = entradasApiService.getEntradas()
+        if (result.isSuccessful) {
+            val entradas = result.body() ?: emptyList()
+            // Filter by user email or display all
+            updateUI(entradas)
+        }
+    } catch (e: Exception) {
+        showError("Error al cargar entradas: ${e.message}")
+    }
+}
+```

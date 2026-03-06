@@ -1,0 +1,415 @@
+---
+title: "Testing"
+description: "Test structure, instrumented tests, and running the test suite"
+---
+
+## Testing Overview
+
+RegistroX uses Android instrumented tests (androidTest) to test UI components and user interactions. The project uses Jetpack Compose Testing framework with JUnit4.
+
+## Test Structure
+
+Tests are organized in the `androidTest` source set, mirroring the main source structure:
+
+```
+app/src/androidTest/java/com/example/registrox_proyecto/
+├── ui/
+│   ├── components/
+│   │   ├── bottombar/
+│   │   │   └── BottomBarTest.kt
+│   │   ├── cards/
+│   │   │   ├── EntradaCardTest.kt
+│   │   │   └── TicketCardTest.kt
+│   │   └── topbar/
+│   │       └── TopBarTest.kt
+│   └── screens/
+│       ├── ComprasScreenTest.kt
+│       ├── DetalleEntradaScreenTest.kt
+│       ├── EntradaScreenTest.kt
+│       ├── HomeScreenTest.kt
+│       ├── HomeTrabajadorScreenTest.kt
+│       ├── LoginScreenTest.kt
+│       ├── OtpScreenTest.kt
+│       ├── ProfileScreenTest.kt
+│       ├── RegisterScreenTest.kt
+│       └── ScannerScreenTest.kt
+└── ExampleInstrumentedTest.kt
+```
+
+## Test Dependencies
+
+The following dependencies are configured in `build.gradle.kts`:
+
+```kotlin build.gradle.kts
+dependencies {
+    // Test dependencies
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.test.espresso:espresso-intents:3.6.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    
+    // Debug dependencies
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+```
+
+## Component Testing
+
+### Bottom Bar Tests
+
+<Accordion title="BottomBarTest.kt">
+```kotlin BottomBarTest.kt
+class BottomBarTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+    
+    @Test
+    fun bottomBar_muestraSoloOpcionesParaUsuarioNormal() {
+        composeTestRule.setContent {
+            val navController = rememberNavController()
+            
+            BottomBar(
+                navController = navController,
+                items = listOf(
+                    BottomNavItem.Home,
+                    BottomNavItem.QR,
+                    BottomNavItem.Profile,
+                    BottomNavItem.Scan
+                ),
+                userRole = Role.USUARIO
+            )
+        }
+        
+        // Verify visible items
+        composeTestRule.onNodeWithText("Explorar").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Entradas").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cuenta").assertIsDisplayed()
+        
+        // Verify hidden item
+        composeTestRule.onNodeWithText("Verificar").assertDoesNotExist()
+    }
+    
+    @Test
+    fun bottomBar_muestraOpcionTrabajadorCuandoRolEsTrabajador() {
+        composeTestRule.setContent {
+            val navController = rememberNavController()
+            
+            BottomBar(
+                navController = navController,
+                items = listOf(
+                    BottomNavItem.Home,
+                    BottomNavItem.QR,
+                    BottomNavItem.Profile,
+                    BottomNavItem.Scan
+                ),
+                userRole = Role.TRABAJADOR
+            )
+        }
+        
+        composeTestRule.onNodeWithText("Verificar").assertIsDisplayed()
+    }
+    
+    @Test
+    fun bottomBar_navegaAEntradasCorrectamente() {
+        composeTestRule.setContent {
+            val navController = rememberNavController()
+            
+            Scaffold(
+                bottomBar = {
+                    BottomBar(
+                        navController = navController,
+                        items = listOf(
+                            BottomNavItem.Home,
+                            BottomNavItem.QR,
+                            BottomNavItem.Profile
+                        ),
+                        userRole = Role.USUARIO
+                    )
+                }
+            ) { padding ->
+                NavHost(
+                    navController = navController,
+                    startDestination = Routes.HOME
+                ) {
+                    composable(Routes.HOME) { Text("Pantalla Home") }
+                    composable(Routes.ENTRADAS) { Text("Pantalla Entradas") }
+                    composable(Routes.PROFILE) { Text("Pantalla Perfil") }
+                }
+            }
+        }
+        
+        // Perform navigation
+        composeTestRule.onNodeWithText("Entradas").performClick()
+        
+        // Verify navigation occurred
+        composeTestRule.onNodeWithText("Pantalla Entradas").assertIsDisplayed()
+    }
+}
+```
+</Accordion>
+
+### Card Component Tests
+
+<Accordion title="EntradaCardTest.kt">
+```kotlin EntradaCardTest.kt
+class EntradaCardTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+    
+    @Test
+    fun entradaCard_muestraTituloYPrecioCorrectamente() {
+        val entrada = Entrada(
+            id = 1L,
+            titulo = "Concierto Rock",
+            lugar = "Estadio Nacional",
+            precio = 25000.0,
+            estado = "disponible",
+            codigoQR = "QR123"
+        )
+        
+        composeTestRule.setContent {
+            EntradaCard(entrada = entrada)
+        }
+        
+        composeTestRule.onNodeWithText("Concierto Rock").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Estadio Nacional").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Precio: 25000.0 $").assertIsDisplayed()
+    }
+    
+    @Test
+    fun entradaCard_botonAgregarEstaHabilitadoCuandoDisponible() {
+        val entrada = Entrada(
+            id = 1L,
+            titulo = "Concierto",
+            lugar = "Lugar",
+            precio = 10000.0,
+            estado = "disponible"
+        )
+        
+        composeTestRule.setContent {
+            EntradaCard(entrada = entrada)
+        }
+        
+        composeTestRule.onNodeWithText("Agregar").assertIsEnabled()
+    }
+    
+    @Test
+    fun entradaCard_botonAgregarEstaDeshabilitadoCuandoNoDisponible() {
+        val entrada = Entrada(
+            id = 1L,
+            titulo = "Concierto",
+            lugar = "Lugar",
+            precio = 10000.0,
+            estado = "usado"
+        )
+        
+        composeTestRule.setContent {
+            EntradaCard(entrada = entrada)
+        }
+        
+        composeTestRule.onNodeWithText("Agregar").assertIsNotEnabled()
+    }
+    
+    @Test
+    fun entradaCard_llamaCallbackCuandoSePresionaAgregar() {
+        var clickedEntrada: Entrada? = null
+        val entrada = Entrada(
+            id = 1L,
+            titulo = "Concierto",
+            lugar = "Lugar",
+            precio = 10000.0,
+            estado = "disponible"
+        )
+        
+        composeTestRule.setContent {
+            EntradaCard(
+                entrada = entrada,
+                onAgregar = { clickedEntrada = it }
+            )
+        }
+        
+        composeTestRule.onNodeWithText("Agregar").performClick()
+        
+        assertEquals(entrada, clickedEntrada)
+    }
+}
+```
+</Accordion>
+
+## Screen Testing
+
+Screen tests verify user flows and interactions:
+
+```kotlin LoginScreenTest.kt
+class LoginScreenTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+    
+    @Test
+    fun loginScreen_muestraFormularioCorrectamente() {
+        composeTestRule.setContent {
+            val navController = rememberNavController()
+            val viewModel: LoginViewModel = viewModel()
+            
+            LoginScreen(navController, viewModel)
+        }
+        
+        // Verify form fields
+        composeTestRule.onNodeWithText("Email").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Contraseña").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Iniciar Sesión").assertIsDisplayed()
+    }
+    
+    @Test
+    fun loginScreen_muestraErrorCuandoCamposVacios() {
+        composeTestRule.setContent {
+            val navController = rememberNavController()
+            val viewModel: LoginViewModel = viewModel()
+            
+            LoginScreen(navController, viewModel)
+        }
+        
+        // Click login without entering data
+        composeTestRule.onNodeWithText("Iniciar Sesión").performClick()
+        
+        // Verify error messages
+        composeTestRule.waitUntil(timeoutMillis = 2000) {
+            composeTestRule
+                .onAllNodesWithText("El email es requerido")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+}
+```
+
+## Testing Utilities
+
+### Compose Test Rule
+
+All tests use `createComposeRule()` to set up the Compose testing environment:
+
+```kotlin
+@get:Rule
+val composeTestRule = createComposeRule()
+```
+
+### Common Assertions
+
+<CodeGroup>
+```kotlin Display Assertions
+// Assert element is displayed
+composeTestRule.onNodeWithText("Text").assertIsDisplayed()
+
+// Assert element exists but may not be visible
+composeTestRule.onNodeWithText("Text").assertExists()
+
+// Assert element does not exist
+composeTestRule.onNodeWithText("Text").assertDoesNotExist()
+```
+
+```kotlin State Assertions
+// Assert button is enabled
+composeTestRule.onNodeWithText("Button").assertIsEnabled()
+
+// Assert button is disabled
+composeTestRule.onNodeWithText("Button").assertIsNotEnabled()
+
+// Assert checkbox is checked
+composeTestRule.onNodeWithTag("checkbox").assertIsOn()
+```
+
+```kotlin Content Assertions
+// Assert text content
+composeTestRule.onNodeWithText("Expected text").assertExists()
+
+// Assert content description
+composeTestRule.onNodeWithContentDescription("Icon").assertExists()
+```
+</CodeGroup>
+
+### Common Actions
+
+```kotlin Interactions
+// Click
+composeTestRule.onNodeWithText("Button").performClick()
+
+// Text input
+composeTestRule.onNodeWithTag("emailField")
+    .performTextInput("user@example.com")
+
+// Scroll
+composeTestRule.onNodeWithTag("lazyColumn")
+    .performScrollToIndex(5)
+```
+
+## Running Tests
+
+### From Android Studio
+
+1. Right-click on test class or package
+2. Select "Run Tests"
+3. View results in the Run window
+
+### From Command Line
+
+```bash
+# Run all instrumented tests
+./gradlew connectedAndroidTest
+
+# Run specific test class
+./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.registrox_proyecto.ui.components.bottombar.BottomBarTest
+
+# Run tests with coverage
+./gradlew connectedAndroidTest jacocoTestReport
+```
+
+### On Physical Device or Emulator
+
+```bash
+# Install app and run tests
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w com.example.registrox_proyecto.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+## Test Configuration
+
+Configure test runner in `build.gradle.kts`:
+
+```kotlin build.gradle.kts
+android {
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+}
+```
+
+## Best Practices
+
+<Note>
+Follow these testing best practices:
+
+1. **Isolation** - Each test should be independent
+2. **Arrange-Act-Assert** - Structure tests clearly
+3. **Descriptive names** - Test names should describe what they verify
+4. **Single responsibility** - Test one thing per test
+5. **Mock dependencies** - Use fakes for ViewModels and repositories
+6. **Semantic matchers** - Prefer `onNodeWithText()` over `onNodeWithTag()`
+7. **Wait for async** - Use `waitUntil()` for asynchronous operations
+</Note>
+
+## Continuous Integration
+
+Add test execution to your CI pipeline:
+
+```yaml .github/workflows/android.yml
+- name: Run instrumented tests
+  uses: reactivecircus/android-emulator-runner@v2
+  with:
+    api-level: 30
+    target: google_apis
+    arch: x86_64
+    script: ./gradlew connectedAndroidTest
+```

@@ -1,0 +1,260 @@
+---
+title: "Key Features"
+description: "Comprehensive overview of RegistroX's powerful features for ticket management and event access control"
+---
+
+# Key Features
+
+RegistroX provides a complete solution for event ticket management with modern Android technologies. Explore the key features that make RegistroX a powerful platform for both event attendees and organizers.
+
+## Core Features
+
+<CardGroup cols={2}>
+  <Card
+    title="User Authentication"
+    icon="shield-check"
+    href="/features/authentication"
+  >
+    Secure login and registration with OTP verification and session persistence
+  </Card>
+  <Card
+    title="Ticket Management"
+    icon="ticket"
+    href="/features/tickets"
+  >
+    Browse, purchase, and manage event tickets with real-time synchronization
+  </Card>
+  <Card
+    title="QR Code System"
+    icon="qrcode"
+    href="/features/qr-scanner"
+  >
+    Generate and scan QR codes for seamless ticket validation
+  </Card>
+  <Card
+    title="Shopping Cart"
+    icon="cart-shopping"
+    href="/features/shopping-cart"
+  >
+    Manage ticket purchases with local persistence and checkout flow
+  </Card>
+  <Card
+    title="Profile Management"
+    icon="user"
+    href="/features/profile"
+  >
+    Update user information and upload profile images
+  </Card>
+  <Card
+    title="Ticket Validation"
+    icon="circle-check"
+    href="/features/ticket-validation"
+  >
+    Worker interface for validating tickets at event entry points
+  </Card>
+</CardGroup>
+
+## User Management
+
+### Authentication & Authorization
+
+RegistroX implements a secure authentication system with:
+
+- **Email/Password Login** - Standard authentication with form validation
+- **User Registration** - Create new accounts with role assignment
+- **OTP Verification** - Two-factor authentication via one-time codes
+- **Session Persistence** - Automatic login using DataStore
+- **Role-Based Access** - Different interfaces for users and workers
+
+```kotlin
+// Login with credentials
+loginViewModel.login(email, password)
+
+// Verify OTP code
+loginViewModel.verifyOtp(code)
+```
+
+### Role System
+
+Two distinct user roles provide tailored experiences:
+
+| Role | Access Level | Features |
+|------|-------------|----------|
+| **USUARIO** | Standard User | Browse and purchase tickets, view purchase history |
+| **TRABAJADOR** | Event Worker | Access scanner interface, validate tickets at entry |
+
+## Ticket Management
+
+### Event Browsing
+
+Users can browse available tickets with comprehensive details:
+
+- Event title and location
+- Ticket pricing and availability
+- Real-time status updates
+- Search and filter capabilities
+
+### Purchase Flow
+
+Complete checkout process includes:
+
+1. Browse available tickets
+2. Add tickets to shopping cart
+3. Review cart with quantities
+4. Complete purchase
+5. Generate unique QR codes
+6. Store tickets locally and remotely
+
+### Ticket States
+
+Tickets progress through multiple states:
+
+- **disponible** - Available for purchase
+- **vendido** - Sold but not yet used
+- **usado** - Validated and used at event
+- **cancelado** - Cancelled or refunded
+
+## QR Code System
+
+### Code Generation
+
+Each purchased ticket receives a unique QR code:
+
+```kotlin
+val codigoQR = "TICKET-${usuarioId}-${entrada.id}-${System.currentTimeMillis()}"
+```
+
+Security features:
+- Timestamp-based uniqueness
+- User ID association
+- Ticket ID reference
+- Server-side validation
+
+### Scanning & Validation
+
+Workers can scan and validate tickets:
+
+- Camera-based QR scanning using ZXing
+- Real-time validation against backend
+- Visual feedback (success/error states)
+- Offline fallback with manual entry
+
+## Data Synchronization
+
+### Real-Time Updates
+
+RegistroX maintains data consistency through:
+
+- Automatic API synchronization
+- Local caching with DataStore
+- Pull-to-refresh capabilities
+- Background updates
+
+### Offline Support
+
+Key features work offline:
+- View purchased tickets
+- Access profile information
+- Browse cached ticket data
+
+Data syncs automatically when connection is restored.
+
+## User Interface
+
+### Navigation System
+
+Modern navigation patterns:
+
+- Bottom navigation bar with role-based items
+- Conditional routing based on authentication
+- Deep linking support
+- Smooth screen transitions
+
+### Top Bar Features
+
+Dynamic top bar adapts to context:
+
+- **Home** - Shopping cart icon with badge count
+- **Worker** - Logout button for session management
+- **Default** - App title and back navigation
+
+## Permissions
+
+RegistroX requires specific permissions:
+
+- **CAMERA** - QR code scanning
+- **INTERNET** - API communication
+- **READ_EXTERNAL_STORAGE** - Profile image upload
+- **ACCESS_NETWORK_STATE** - Network status monitoring
+- **POST_NOTIFICATIONS** - System notifications
+
+## API Integration
+
+### Backend Services
+
+Three main API services:
+
+<CardGroup cols={3}>
+  <Card
+    title="Entradas API"
+    icon="ticket"
+    href="/api/entradas"
+  >
+    Manage tickets and availability
+  </Card>
+  <Card
+    title="Usuarios API"
+    icon="user"
+    href="/api/usuarios"
+  >
+    User accounts and profiles
+  </Card>
+  <Card
+    title="Compras API"
+    icon="shopping-bag"
+    href="/api/compras"
+  >
+    Purchase transactions
+  </Card>
+</CardGroup>
+
+### Network Configuration
+
+Retrofit-based networking with:
+- OkHttp logging interceptor
+- Gson JSON parsing
+- Coroutine-based async operations
+- Error handling and retry logic
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="User Features"
+    icon="user"
+    href="/features/authentication"
+  >
+    Explore detailed user feature documentation
+  </Card>
+  <Card
+    title="Worker Features"
+    icon="qrcode"
+    href="/features/qr-scanner"
+  >
+    Learn about ticket validation and scanning
+  </Card>
+  <Card
+    title="Development Guide"
+    icon="code"
+    href="/development/project-structure"
+  >
+    Contribute to the project
+  </Card>
+  <Card
+    title="API Reference"
+    icon="book"
+    href="/api/usuarios"
+  >
+    View complete API documentation
+  </Card>
+</CardGroup>

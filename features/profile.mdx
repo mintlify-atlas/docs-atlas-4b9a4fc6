@@ -1,0 +1,403 @@
+---
+title: 'Profile Management'
+description: 'Manage user profiles, upload profile images, and handle account settings'
+---
+
+## Overview
+
+RegistroX provides comprehensive profile management features allowing users to personalize their accounts with profile images and manage their account settings including logout functionality.
+
+<Note>
+Profile operations require authentication and internet connectivity for image uploads and synchronization.
+</Note>
+
+## Profile Screen
+
+The profile screen displays user information and provides options for image management and account actions.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Profile Image" icon="image">
+    Upload and manage profile pictures
+  </Card>
+  <Card title="User Information" icon="id-card">
+    Display email and role information
+  </Card>
+  <Card title="Image Sync" icon="cloud-arrow-down">
+    Automatic synchronization from API
+  </Card>
+  <Card title="Logout" icon="arrow-right-from-bracket">
+    Secure session termination
+  </Card>
+</CardGroup>
+
+## Profile Implementation
+
+The profile screen is implemented with role-based display and image management:
+
+```kotlin ProfileScreen.kt:27
+@Composable
+fun ProfileScreen(
+    user: User,
+    loginViewModel: LoginViewModel,
+    navController: NavController,
+    profileViewModel: ProfileViewModel
+) {
+    val imageUrl = profileViewModel.imageUriState.value
+
+    LaunchedEffect(Unit) {
+        profileViewModel.sincronizarImagenDesdeApi(user.id)
+    }
+
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            uri?.let { profileViewModel.subirImagen(user.id, it) }
+        }
+    )
+
+    val perfilTexto = when (user.role) {
+        Role.TRABAJADOR -> "Perfil de trabajador"
+        else -> "Perfil de usuario"
+    }
+}
+```
+
+## User Roles
+
+RegistroX supports two user roles with different permissions:
+
+<Accordion title="USUARIO (Regular User)">
+  Regular users can:
+  - Browse and purchase tickets
+  - Manage their profile
+  - View purchase history
+  - Access their QR codes
+</Accordion>
+
+<Accordion title="TRABAJADOR (Worker)">
+  Workers have additional capabilities:
+  - All regular user features
+  - Scan and validate QR codes
+  - Mark tickets as used
+  - Access worker dashboard
+</Accordion>
+
+### Role Display
+
+The profile screen adapts based on user role:
+
+```kotlin ProfileScreen.kt:46
+val perfilTexto = when (user.role) {
+    Role.TRABAJADOR -> "Perfil de trabajador"
+    else -> "Perfil de usuario"
+}
+
+Text(perfilTexto, style = MaterialTheme.typography.titleLarge)
+Text(user.email, style = MaterialTheme.typography.bodyMedium)
+```
+
+## Profile Image Management
+
+Users can upload and manage their profile pictures with automatic cloud synchronization.
+
+### Image Display
+
+The profile screen displays the current profile image or a default icon:
+
+```kotlin ProfileScreen.kt:59
+if (!imageUrl.isNullOrEmpty()) {
+    AsyncImage(
+        model = imageUrl,
+        contentDescription = "Foto de perfil",
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(140.dp)
+            .clip(CircleShape)
+            .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+    )
+    Spacer(Modifier.height(12.dp))
+    Button(onClick = { pickImageLauncher.launch("image/*") }) {
+        Text("Cambiar foto de perfil")
+    }
+} else {
+    Icon(
+        imageVector = Icons.Default.AccountCircle,
+        contentDescription = "Sin imagen",
+        modifier = Modifier.size(140.dp).clip(CircleShape),
+        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    )
+    Spacer(Modifier.height(12.dp))
+    Button(onClick = { pickImageLauncher.launch("image/*") }) {
+        Text("Agregar foto de perfil")
+    }
+}
+```
+
+### Image Upload Process
+
+<Steps>
+  <Step title="Image Selection">
+    User selects an image from device gallery
+  </Step>
+  <Step title="Convert to Multipart">
+    Image URI is converted to multipart form data
+  </Step>
+  <Step title="Upload to API">
+    Image is uploaded to backend server
+  </Step>
+  <Step title="Save URL">
+    Image URL is saved to local DataStore
+  </Step>
+  <Step title="Update UI">
+    Profile screen displays the new image
+  </Step>
+</Steps>
+
+### Upload Implementation
+
+The `ProfileViewModel` handles image upload with the backend API:
+
+```kotlin ProfileViewModel.kt:40
+fun subirImagen(usuarioId: Long, localUri: Uri) {
+    viewModelScope.launch {
+        val context = getApplication<Application>().applicationContext
+        if (!NetworkUtils.isNetworkAvailable(context)) return@launch
+
+        try {
+            val multipart = uriToMultipart(context, localUri, "file")
+
+            val response = RetrofitInstance.api.subirImagenMultipart(
+                multipart,
+                usuarioId
+            )
+
+            if (response.isSuccessful) {
+                val imageUrl = response.body()?.imageUrl ?: ""
+                dataStore.saveImageUri(imageUrl)
+                imageUriState.value = imageUrl
+            }
+
+        } catch (_: Exception) {
+        }
+    }
+}
+```
+
+## Image Synchronization
+
+Profile images are automatically synchronized from the API when the profile screen loads.
+
+### Sync from API
+
+```kotlin ProfileViewModel.kt:64
+fun sincronizarImagenDesdeApi(usuarioId: Long) {
+    viewModelScope.launch {
+        val context = getApplication<Application>().applicationContext
+        if (!NetworkUtils.isNetworkAvailable(context)) return@launch
+
+        try {
+            val url = authRepository.getImagenPorUsuarioId(usuarioId)
+            if (url != null) {
+                dataStore.saveImageUri(url)
+                imageUriState.value = url
+            }
+        } catch (_: Exception) {
+        }
+    }
+}
+```
+
+### Local Persistence
+
+Images are cached locally using DataStore for offline access:
+
+```kotlin ProfileViewModel.kt:24
+init {
+    viewModelScope.launch {
+        dataStore.imageUri.collectLatest { uri ->
+            if (!uri.isNullOrBlank()) {
+                imageUriState.value = uri
+            }
+        }
+    }
+}
+```
+
+## Logout Functionality
+
+Users can securely log out from their account, clearing all session data.
+
+### Logout Button
+
+```kotlin ProfileScreen.kt:94
+Button(
+    onClick = {
+        profileViewModel.clearImage()
+        loginViewModel.logout()
+        navController.navigate("login") {
+            popUpTo("home") { inclusive = true }
+        }
+    },
+    colors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.error
+    )
+) {
+    Text("Cerrar sesion")
+}
+```
+
+### Logout Process
+
+<Steps>
+  <Step title="Clear Profile Image">
+    Remove cached profile image from DataStore
+  </Step>
+  <Step title="Clear Authentication">
+    Remove user credentials and session data
+  </Step>
+  <Step title="Reset State">
+    Clear all ViewModels and state
+  </Step>
+  <Step title="Navigate to Login">
+    Redirect to login screen with cleared navigation stack
+  </Step>
+</Steps>
+
+### Logout Implementation
+
+The `LoginViewModel` handles session cleanup:
+
+```kotlin LoginViewModel.kt:98
+fun logout() {
+    viewModelScope.launch {
+        authDataStore.saveUser("", "")
+        _user.value = null
+        justLoggedIn = false
+        _formState.value = LoginFormState()
+    }
+}
+```
+
+### Clear Profile Image
+
+```kotlin ProfileViewModel.kt:33
+fun clearImage() {
+    viewModelScope.launch {
+        dataStore.clearImageUri()
+        imageUriState.value = null
+    }
+}
+```
+
+## State Management
+
+The profile uses reactive state management with StateFlow for real-time updates:
+
+```kotlin ProfileViewModel.kt:21
+val imageUriState = mutableStateOf<String?>(null)
+```
+
+<Note>
+All profile changes are automatically synchronized with the backend API when an internet connection is available.
+</Note>
+
+## UI Components
+
+### Circular Profile Image
+
+Profile images are displayed in a circular shape with a primary color border:
+
+- **Size**: 140dp diameter
+- **Shape**: Circular with `CircleShape`
+- **Border**: 3dp width, primary theme color
+- **Content Scale**: Crop for proper aspect ratio
+
+### Default Icon
+
+When no profile image is available, a default account icon is shown:
+
+- **Icon**: `Icons.Default.AccountCircle`
+- **Size**: 140dp
+- **Tint**: OnSurface color with 40% opacity
+- **Shape**: Circular
+
+## User Experience Flow
+
+<Steps>
+  <Step title="View Profile">
+    User navigates to profile screen from main navigation
+  </Step>
+  <Step title="Auto-Sync">
+    Profile image automatically loads from API
+  </Step>
+  <Step title="Upload Image (Optional)">
+    User can add or change their profile picture
+  </Step>
+  <Step title="View Information">
+    User sees their email and role information
+  </Step>
+  <Step title="Logout (Optional)">
+    User can securely log out when needed
+  </Step>
+</Steps>
+
+## Error Handling
+
+The profile system gracefully handles various scenarios:
+
+- **No Internet**: Upload operations are skipped silently
+- **Upload Failure**: User can retry the upload
+- **Missing Image**: Default icon is displayed
+- **Sync Failure**: Cached image is used if available
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Image Quality" icon="image">
+    Use high-quality images for better display
+  </Card>
+  <Card title="File Size" icon="file">
+    Optimize images before upload for faster loading
+  </Card>
+  <Card title="Privacy" icon="shield">
+    Profile images are private to the user account
+  </Card>
+  <Card title="Persistence" icon="database">
+    Images are cached locally for offline viewing
+  </Card>
+</CardGroup>
+
+## Integration with Other Features
+
+The profile system integrates seamlessly with other app features:
+
+### Authentication
+
+- Profile requires valid authentication session
+- Logout clears all authentication data
+- Role determines available features
+
+### Navigation
+
+- Profile accessible from main bottom navigation
+- Logout redirects to login screen
+- Back navigation returns to previous screen
+
+### Data Persistence
+
+- Profile images stored in local DataStore
+- Automatic sync with backend on connection
+- Offline viewing of cached images
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    Learn about login and registration
+  </Card>
+  <Card title="Shopping Cart" icon="shopping-cart" href="/features/shopping-cart">
+    Explore the ticket purchase flow
+  </Card>
+</CardGroup>

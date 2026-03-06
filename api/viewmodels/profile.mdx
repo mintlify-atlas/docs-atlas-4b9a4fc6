@@ -1,0 +1,262 @@
+---
+title: "ProfileViewModel"
+description: "ViewModel for managing user profile and profile images in RegistroX"
+---
+
+## Overview
+
+The `ProfileViewModel` manages user profile functionality, specifically handling profile image upload, synchronization, and persistence. It coordinates with `ProfileDataStore` to cache images locally and `AuthRepository` to sync with the backend.
+
+## Properties
+
+### Observable State
+
+<ParamField path="imageUriState" type="MutableState<String?>">
+  The current profile image URI/URL. Can be a local URI or remote URL from the API.
+</ParamField>
+
+## Methods
+
+### clearImage
+
+Clears the profile image from both local storage and state.
+
+```kotlin
+fun clearImage()
+```
+
+**Behavior:**
+- Clears image URI from DataStore
+- Resets `imageUriState` to null
+
+**Usage Example:**
+
+```kotlin
+Button(onClick = {
+    profileViewModel.clearImage()
+    loginViewModel.logout()
+}) {
+    Text("Cerrar sesión")
+}
+```
+
+### subirImagen
+
+Uploads a profile image to the server and updates local state.
+
+```kotlin
+fun subirImagen(usuarioId: Long, localUri: Uri)
+```
+
+<ParamField path="usuarioId" type="Long">
+  The ID of the user uploading the image
+</ParamField>
+
+<ParamField path="localUri" type="Uri">
+  The local URI of the selected image file
+</ParamField>
+
+**Behavior:**
+1. Validates network connectivity
+2. Converts URI to multipart file using `uriToMultipart()`
+3. Uploads to API via `subirImagenMultipart()`
+4. On success:
+   - Saves image URL to DataStore
+   - Updates `imageUriState` with remote URL
+
+**Usage Example:**
+
+```kotlin
+val pickImageLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent(),
+    onResult = { uri: Uri? ->
+        uri?.let { profileViewModel.subirImagen(user.id, it) }
+    }
+)
+
+Button(onClick = { pickImageLauncher.launch("image/*") }) {
+    Text("Cambiar foto de perfil")
+}
+```
+
+<Note>
+  The image upload requires internet connectivity and valid user ID. Network failures are handled silently.
+</Note>
+
+### sincronizarImagenDesdeApi
+
+Fetches the user's profile image from the API and updates local state.
+
+```kotlin
+fun sincronizarImagenDesdeApi(usuarioId: Long)
+```
+
+<ParamField path="usuarioId" type="Long">
+  The ID of the user whose image to fetch
+</ParamField>
+
+**Behavior:**
+1. Validates network connectivity
+2. Fetches image URL via `authRepository.getImagenPorUsuarioId()`
+3. On success:
+   - Saves URL to DataStore
+   - Updates `imageUriState`
+
+**Usage Example:**
+
+```kotlin
+LaunchedEffect(Unit) {
+    profileViewModel.sincronizarImagenDesdeApi(user.id)
+}
+```
+
+## Complete Usage Example
+
+```kotlin
+@Composable
+fun ProfileScreen(
+    user: User,
+    loginViewModel: LoginViewModel,
+    navController: NavController,
+    profileViewModel: ProfileViewModel
+) {
+    val imageUrl = profileViewModel.imageUriState.value
+
+    // Sync image on screen load
+    LaunchedEffect(Unit) {
+        profileViewModel.sincronizarImagenDesdeApi(user.id)
+    }
+
+    // Image picker launcher
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            uri?.let { profileViewModel.subirImagen(user.id, it) }
+        }
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Display profile image
+        if (!imageUrl.isNullOrEmpty()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .size(140.dp)
+                    .clip(CircleShape)
+                    .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+            )
+            Button(onClick = { pickImageLauncher.launch("image/*") }) {
+                Text("Cambiar foto de perfil")
+            }
+        } else {
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                modifier = Modifier.size(140.dp)
+            )
+            Button(onClick = { pickImageLauncher.launch("image/*") }) {
+                Text("Agregar foto de perfil")
+            }
+        }
+
+        // User info
+        Text(user.email)
+
+        // Logout button
+        Button(
+            onClick = {
+                profileViewModel.clearImage()
+                loginViewModel.logout()
+                navController.navigate("login") {
+                    popUpTo("home") { inclusive = true }
+                }
+            }
+        ) {
+            Text("Cerrar sesión")
+        }
+    }
+}
+```
+
+## Initialization
+
+On initialization, the ViewModel loads the cached image URI from DataStore:
+
+```kotlin
+init {
+    viewModelScope.launch {
+        dataStore.imageUri.collectLatest { uri ->
+            if (!uri.isNullOrBlank()) {
+                imageUriState.value = uri
+            }
+        }
+    }
+}
+```
+
+This ensures the profile image persists across app restarts.
+
+## Image Upload Flow
+
+1. **User selects image** via `ActivityResultContracts.GetContent()`
+2. **Convert to multipart** using `uriToMultipart()` utility
+3. **Upload to API** via `RetrofitInstance.api.subirImagenMultipart()`
+4. **Server response** includes `imageUrl`
+5. **Cache URL** in ProfileDataStore
+6. **Update UI** via `imageUriState`
+
+## Network Handling
+
+All network operations check connectivity before proceeding:
+
+```kotlin
+val context = getApplication<Application>().applicationContext
+if (!NetworkUtils.isNetworkAvailable(context)) return@launch
+```
+
+## Error Handling
+
+The ViewModel uses a silent error handling strategy:
+
+```kotlin
+try {
+    // Network operation
+} catch (_: Exception) {
+    // Fail silently - no user notification
+}
+```
+
+This approach prevents error notifications from disrupting the user experience, as profile images are a non-critical feature.
+
+<Note>
+  Consider adding error logging or analytics tracking for failed image operations in production.
+</Note>
+
+## Dependencies
+
+- **ProfileDataStore**: Persists profile image URIs locally
+- **AuthRepository**: Fetches and uploads profile images via API
+- **NetworkUtils**: Validates network connectivity
+- **Application**: Provides application context
+
+## Image Format Support
+
+The image picker is configured to accept all image types:
+
+```kotlin
+pickImageLauncher.launch("image/*")
+```
+
+Supported formats depend on the device, but typically include:
+- JPEG
+- PNG
+- WebP
+- GIF (static)
+
+## Related
+
+- [Usuario API Service](/api/usuarios)
+- [Data Layer](/development/data-layer)
+- [User Model](/api/models/user)

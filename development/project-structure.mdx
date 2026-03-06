@@ -1,0 +1,154 @@
+---
+title: "Project Structure"
+description: "Understanding the directory layout and package organization of RegistroX"
+---
+
+## Overview
+
+RegistroX follows a clean architecture pattern with clear separation between UI, data, and navigation layers. The project is organized into logical packages that promote maintainability and scalability.
+
+## Directory Layout
+
+```
+app/src/main/java/com/example/registrox_proyecto/
+├── data/
+│   ├── datastore/          # Local data persistence
+│   ├── model/              # Data models and entities
+│   ├── remote/             # API services and networking
+│   ├── repository/         # Repository pattern implementations
+│   └── scannerqr/          # QR scanner functionality
+├── navigation/             # Navigation graph and routes
+├── ui/
+│   ├── components/         # Reusable UI components
+│   │   ├── Net/           # Network-related UI components
+│   │   ├── bottombar/     # Bottom navigation bar
+│   │   ├── cards/         # Card components
+│   │   └── topbar/        # Top app bars
+│   ├── screens/           # Screen composables
+│   ├── theme/             # Material theme configuration
+│   └── viewmodel/         # ViewModels for business logic
+├── utils/                 # Utility functions and helpers
+└── MainActivity.kt        # Application entry point
+```
+
+## Package Organization
+
+<Accordion title="Data Layer">
+The `data` package contains all data-related code:
+
+- **datastore**: DataStore preferences for local storage
+- **model**: Kotlin data classes representing app entities
+- **remote**: Retrofit API service interfaces
+- **repository**: Repository implementations for data access
+- **scannerqr**: QR code scanning activity
+</Accordion>
+
+<Accordion title="UI Layer">
+The `ui` package is organized by functionality:
+
+- **components**: Reusable composable components
+  - `bottombar`: Bottom navigation implementation
+  - `cards`: Card UI elements (EntradaCard, etc.)
+  - `topbar`: Top app bar variants (HomeTopBar, TrabajadorTopBar)
+  - `Net`: Internet connectivity components
+- **screens**: Full-screen composables for each route
+- **theme**: Material 3 theme configuration
+- **viewmodel**: ViewModels managing UI state and business logic
+</Accordion>
+
+<Accordion title="Navigation Layer">
+The `navigation` package handles app navigation:
+
+- `Routes.kt`: String constants for all navigation routes
+- `NavGraph.kt`: Compose navigation graph definition
+- `BottomNavItem.kt`: Bottom navigation item definitions
+</Accordion>
+
+## Key Files
+
+<CodeGroup>
+```kotlin MainActivity.kt
+// Application entry point
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        
+        permisosLauncher.launch(permisosNecesarios)
+        
+        setContent {
+            RegistroXProyectoTheme {
+                RegistroXApp()
+            }
+        }
+    }
+}
+```
+
+```kotlin Routes.kt
+object Routes {
+    const val OTP = "otp"
+    const val LOGIN = "login"
+    const val HOME = "home"
+    const val ENTRADAS = "entradas"
+    const val REGISTER = "register"
+    const val PROFILE = "profile"
+    const val DETALLE = "detalle/{entradaId}"
+    const val TRABAJADOR = "trabajador"
+    const val COMPRAS = "compras"
+}
+```
+</CodeGroup>
+
+## Build Configuration
+
+The project uses Kotlin DSL for Gradle configuration:
+
+```kotlin
+android {
+    namespace = "com.example.registrox_proyecto"
+    compileSdk = 36
+    
+    defaultConfig {
+        applicationId = "com.example.registrox_proyecto"
+        minSdk = 24
+        targetSdk = 36
+    }
+    
+    buildFeatures {
+        compose = true
+    }
+}
+```
+
+## Test Structure
+
+Tests are organized in parallel to the main source:
+
+```
+app/src/androidTest/java/com/example/registrox_proyecto/
+├── ui/
+│   ├── components/
+│   │   ├── bottombar/BottomBarTest.kt
+│   │   ├── cards/EntradaCardTest.kt
+│   │   └── topbar/TopBarTest.kt
+│   └── screens/
+│       ├── HomeScreenTest.kt
+│       ├── LoginScreenTest.kt
+│       └── ProfileScreenTest.kt
+└── ExampleInstrumentedTest.kt
+```
+
+<Note>
+The project uses Jetpack Compose for UI, following Material Design 3 guidelines. All UI components are built as composable functions.
+</Note>
+
+## Dependencies
+
+Key dependencies include:
+- **Jetpack Compose**: Modern declarative UI framework
+- **Navigation Compose**: Type-safe navigation
+- **Retrofit**: REST API client
+- **DataStore**: Modern data persistence
+- **ZXing**: QR code generation and scanning
+- **Coil**: Image loading library
